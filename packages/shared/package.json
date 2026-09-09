@@ -1,0 +1,15 @@
+{
+  "name": "@aichat/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "build": "echo 'shared: source consumed directly'",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": { "zod": "^4.5.4" },
+  "devDependencies": { "typescript": "^5.9.3" }
+}

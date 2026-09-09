@@ -1,0 +1,37 @@
+{
+  "name": "@aichat/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --no-warnings=ExperimentalWarning src/index.ts",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node24 --format=esm --packages=external --alias:@aichat/shared=../../packages/shared/src/index.ts --outfile=dist/index.js --sourcemap && node -e \"require(\\\"fs\\\").cpSync(\\\"src/db/migrations\\\",\\\"dist/db/migrations\\\",{recursive:true})\"",
+    "start": "node --no-warnings=ExperimentalWarning dist/index.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "cache-report": "tsx scripts/cache-report.ts"
+  },
+  "dependencies": {
+    "@aichat/shared": "workspace:*",
+    "@anthropic-ai/sdk": "^0.123.0",
+    "@hono/node-server": "^2.1.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "chokidar": "^5.0.0",
+    "gray-matter": "^4.0.3",
+    "hono": "^4.13.5",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.12.2",
+    "openai": "^7.9.0",
+    "pdf-parse": "^2.4.5",
+    "read-excel-file": "^9.3.10",
+    "sharp": "^0.35.4",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# aichat 启动器：可在任意目录调用（软链到 PATH 上即可）。
+set -euo pipefail
+
+# 解析自身真实路径（可能是软链），推出仓库根目录
+src="${BASH_SOURCE[0]}"
+while [ -L "$src" ]; do
+  dir="$(cd -P "$(dirname "$src")" && pwd)"
+  src="$(readlink "$src")"
+  [[ "$src" != /* ]] && src="$dir/$src"
+done
+ROOT="$(cd -P "$(dirname "$src")/.." && pwd)"
+
+usage() {
+  cat <<'USAGE'
+用法: aichat [命令]
+
+  dev            开发模式：server :3000 + web :5173（默认）
+  start          生产模式：单端口 :3000（dist 不存在会先 build）
+  build          构建 shared → web → server
+  stop           停掉占用 3000 / 5173 端口的进程
+  open           用浏览器打开 http://localhost:5173（没起 web 则 :3000）
+  test           跑 vitest
+  typecheck      跑各包 tsc --noEmit
+  root           打印仓库路径
+  <其它>         透传给 pnpm，例如 aichat -C apps/server test
+USAGE
+}
+
+port_pids() { lsof -ti :"$1" -sTCP:LISTEN 2>/dev/null || true; }
+
+cmd="${1:-dev}"
+[ $# -gt 0 ] && shift || true
+
+case "$cmd" in
+  -h|--help|help) usage ;;
+  root) echo "$ROOT" ;;
+  dev)   cd "$ROOT" && exec pnpm dev "$@" ;;
+  build) cd "$ROOT" && exec pnpm build "$@" ;;
+  test)  cd "$ROOT" && exec pnpm test "$@" ;;
+  typecheck) cd "$ROOT" && exec pnpm typecheck "$@" ;;
+  start)
+    cd "$ROOT"
+    [ -f apps/server/dist/index.js ] || pnpm build
+    exec pnpm start "$@"
+    ;;
+  stop)
+    for p in 3000 5173; do
+      pids="$(port_pids "$p")"
+      if [ -n "$pids" ]; then
+        echo "kill :$p -> $pids"
+        # shellcheck disable=SC2086
+        kill $pids 2>/dev/null || true
+      fi
+    done
+    ;;
+  open)
+    if [ -n "$(port_pids 5173)" ]; then open http://localhost:5173
+    else open http://localhost:3000; fi
+    ;;
+  *) cd "$ROOT" && exec pnpm "$cmd" "$@" ;;
+esac

@@ -1,0 +1,27 @@
+node_modules/
+dist/
+data/
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.log
+.DS_Store
+
+# Local credentials, databases, and agent state
+*.pem
+*.key
+*.p12
+*.pfx
+*.sqlite*
+*.db
+*.db-*
+.npmrc
+.netrc
+.zcode/
+.claude/
+.codex/
+coverage/
+*.tsbuildinfo
+
+apps/web/public/artifact-runtime.js
