@@ -2,6 +2,7 @@ import { memo, useState } from 'react';
 import type { Message, ToolResultBlock, Usage } from '@aichat/shared';
 import { Check, Copy, Pencil, RefreshCw, FileText, AlertCircle } from 'lucide-react';
 import { ArtifactMessage } from '../artifacts/ArtifactMessage.js';
+import { ImagePreview } from './ImagePreview.js';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCallCard } from './ToolCallCard';
 import { PendingIndicator } from './PendingIndicator';
@@ -40,11 +41,9 @@ export const MessageItem = memo(function MessageItem({ message, streaming, resul
             <div className="mb-1.5 flex flex-wrap justify-end gap-2">
               {atts.map((b, i) =>
                 b.type === 'image' ? (
-                  <img
+                  <ImagePreview
                     key={i}
                     src={b.attachmentId ? `/api/uploads/${b.attachmentId}` : `data:${b.mime};base64,${b.data}`}
-                    className="max-h-52 rounded-xl object-cover ring-1 ring-zinc-200 dark:ring-zinc-700 shadow-xs"
-                    alt=""
                   />
                 ) : (
                   <a
