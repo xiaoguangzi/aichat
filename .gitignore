@@ -21,6 +21,7 @@ data/
 .zcode/
 .claude/
 .codex/
+AGENTS.md
 coverage/
 *.tsbuildinfo
 
