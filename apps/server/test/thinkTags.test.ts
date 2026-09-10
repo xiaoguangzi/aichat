@@ -13,6 +13,13 @@ function run(chunks: string[], extra: StreamEvent[] = []): StreamEvent[] {
 const texts = (evs: StreamEvent[]) => evs.filter((e) => e.type === 'text_delta').map((e) => e.text).join('');
 const thoughts = (evs: StreamEvent[]) => evs.filter((e) => e.type === 'thinking_delta').map((e) => e.text).join('');
 
+/** Every way a stream could be chopped: whole, one character at a time, and each two-chunk split. */
+const splits = (s: string): string[][] => [
+  [s],
+  Array.from(s),
+  ...Array.from({ length: s.length - 1 }, (_, i) => [s.slice(0, i + 1), s.slice(i + 1)]),
+];
+
 describe('inline <think> tags', () => {
   it('splits an explicit pair at the start of the message', () => {
     const evs = run(['<think>reasoning here</think>the answer']);
@@ -59,35 +66,37 @@ describe('inline <think> tags', () => {
   });
 
   it.each([
-    'some relays use `<thinking>...</thinking>` tags; continue thinking',
-    'some relays use ``<think>`quoted`</think>`` tags; continue thinking',
-    'example:\n```xml\n<thinking>example</thinking>\n```\ncontinue thinking',
-    'example:\n~~~xml\n<think>example</think>\n~~~\ncontinue thinking',
-  ])('keeps quoted tags inside reasoning: %s', (reasoning) => {
+    ['inline code', 'some relays use `<thinking>...</thinking>` tags; continue thinking'],
+    ['doubled backticks', 'some relays use ``<think>`quoted`</think>`` tags; continue thinking'],
+    ['backtick fence', 'example:\n```xml\n<thinking>example</thinking>\n```\ncontinue thinking'],
+    ['tilde fence', 'example:\n~~~xml\n<think>example</think>\n~~~\ncontinue thinking'],
+  ])('keeps quoted tags inside reasoning literal (%s)', (_name, reasoning) => {
     const source = `<think>${reasoning}</think>Final answer`;
-    // Every possible two-chunk split, plus one-character streaming, must agree.
-    const variants = [Array.from(source), ...Array.from({ length: source.length + 1 }, (_, i) => [source.slice(0, i), source.slice(i)])];
-    for (const chunks of variants) {
+    splits(source).forEach((chunks, i) => {
       const evs = run(chunks);
-      expect(thoughts(evs)).toBe(reasoning);
-      expect(texts(evs)).toBe('Final answer');
-      expect(evs.some((e) => e.type === 'thinking_reclassify')).toBe(false);
-    }
+      expect(thoughts(evs), `split ${i}`).toBe(reasoning);
+      expect(texts(evs), `split ${i}`).toBe('Final answer');
+      expect(evs.some((e) => e.type === 'thinking_reclassify'), `split ${i}`).toBe(false);
+    });
   });
 
   it('does not reclassify an answer explaining closing tags in code', () => {
     const source = 'Use `</think>` or `</thinking>` to close the span.';
-    const evs = run(Array.from(source));
-    expect(texts(evs)).toBe(source);
-    expect(evs.some((e) => e.type === 'thinking_reclassify')).toBe(false);
+    splits(source).forEach((chunks, i) => {
+      const evs = run(chunks);
+      expect(texts(evs), `split ${i}`).toBe(source);
+      expect(evs.some((e) => e.type === 'thinking_reclassify'), `split ${i}`).toBe(false);
+    });
   });
 
   it('ignores a quoted close before rescuing the actual template close', () => {
     const source = 'Discuss `</thinking>` and continue.\n</think>Final answer';
-    const evs = run(Array.from(source));
-    const i = evs.findIndex((e) => e.type === 'thinking_reclassify');
-    expect(texts(evs.slice(0, i))).toBe('Discuss `</thinking>` and continue.\n');
-    expect(texts(evs.slice(i))).toBe('Final answer');
+    splits(source).forEach((chunks, split) => {
+      const evs = run(chunks);
+      const i = evs.findIndex((e) => e.type === 'thinking_reclassify');
+      expect(texts(evs.slice(0, i)), `split ${split}`).toBe('Discuss `</thinking>` and continue.\n');
+      expect(texts(evs.slice(i)), `split ${split}`).toBe('Final answer');
+    });
   });
 
   it('passes other events through and flushes before a tool call', async () => {
