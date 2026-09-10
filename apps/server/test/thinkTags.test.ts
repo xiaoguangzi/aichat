@@ -58,6 +58,38 @@ describe('inline <think> tags', () => {
     expect(texts(evs)).toBe('');
   });
 
+  it.each([
+    'some relays use `<thinking>...</thinking>` tags; continue thinking',
+    'some relays use ``<think>`quoted`</think>`` tags; continue thinking',
+    'example:\n```xml\n<thinking>example</thinking>\n```\ncontinue thinking',
+    'example:\n~~~xml\n<think>example</think>\n~~~\ncontinue thinking',
+  ])('keeps quoted tags inside reasoning: %s', (reasoning) => {
+    const source = `<think>${reasoning}</think>Final answer`;
+    // Every possible two-chunk split, plus one-character streaming, must agree.
+    const variants = [Array.from(source), ...Array.from({ length: source.length + 1 }, (_, i) => [source.slice(0, i), source.slice(i)])];
+    for (const chunks of variants) {
+      const evs = run(chunks);
+      expect(thoughts(evs)).toBe(reasoning);
+      expect(texts(evs)).toBe('Final answer');
+      expect(evs.some((e) => e.type === 'thinking_reclassify')).toBe(false);
+    }
+  });
+
+  it('does not reclassify an answer explaining closing tags in code', () => {
+    const source = 'Use `</think>` or `</thinking>` to close the span.';
+    const evs = run(Array.from(source));
+    expect(texts(evs)).toBe(source);
+    expect(evs.some((e) => e.type === 'thinking_reclassify')).toBe(false);
+  });
+
+  it('ignores a quoted close before rescuing the actual template close', () => {
+    const source = 'Discuss `</thinking>` and continue.\n</think>Final answer';
+    const evs = run(Array.from(source));
+    const i = evs.findIndex((e) => e.type === 'thinking_reclassify');
+    expect(texts(evs.slice(0, i))).toBe('Discuss `</thinking>` and continue.\n');
+    expect(texts(evs.slice(i))).toBe('Final answer');
+  });
+
   it('passes other events through and flushes before a tool call', async () => {
     async function* src(): AsyncIterable<StreamEvent> {
       yield { type: 'text_delta', text: '<think>plan</think>calling' };

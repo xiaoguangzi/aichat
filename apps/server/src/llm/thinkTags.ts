@@ -19,6 +19,7 @@ import type { StreamEvent } from '@aichat/shared';
  * Both are deliberately narrow, so a model that merely writes about the tags keeps its text:
  * an opener only counts at the start of the message, and the bare-close rescue happens at most
  * once per message and never once the provider has sent real thinking of its own.
+ * Tags inside Markdown inline code or fenced code blocks are always literal.
  */
 const OPEN = ['<think>', '<thinking>'];
 const CLOSE = ['</think>', '</thinking>'];
@@ -33,17 +34,73 @@ function heldBack(s: string): number {
   return 0;
 }
 
-function firstOf(s: string, tags: string[]): { idx: number; tag: string } | null {
-  let best: { idx: number; tag: string } | null = null;
-  for (const tag of tags) {
-    const idx = s.indexOf(tag);
-    if (idx >= 0 && (!best || idx < best.idx)) best = { idx, tag };
+/** Incremental Markdown code tracking, including delimiters split across deltas. */
+class CodeContext {
+  private inline = 0;
+  private fence = '';
+  private fenceLength = 0;
+  private run = '';
+  private runLength = 0;
+  private runAtLineStart = false;
+  private lineStart = true;
+  private indent = 0;
+
+  clone(): CodeContext { return Object.assign(new CodeContext(), this); }
+
+  get inCode(): boolean { return this.inline > 0 || !!this.fence; }
+
+  private finishRun() {
+    if (!this.runLength) return;
+    if (this.fence) {
+      if (this.runAtLineStart && this.run === this.fence && this.runLength >= this.fenceLength) {
+        this.fence = '';
+      }
+    } else if (this.inline) {
+      if (this.run === '`' && this.runLength === this.inline) this.inline = 0;
+    } else if (this.runAtLineStart && this.runLength >= 3) {
+      this.fence = this.run;
+      this.fenceLength = this.runLength;
+    } else if (this.run === '`') {
+      this.inline = this.runLength;
+    }
+    this.run = '';
+    this.runLength = 0;
   }
-  return best;
+
+  consume(char: string) {
+    if (char !== this.run) this.finishRun();
+    if (char === '`' || char === '~') {
+      if (!this.runLength) {
+        this.run = char;
+        this.runAtLineStart = this.lineStart && this.indent <= 3;
+      }
+      this.runLength++;
+    }
+    if (char === '\n') {
+      this.lineStart = true;
+      this.indent = 0;
+    } else if (this.lineStart && char === ' ') {
+      this.indent++;
+    } else {
+      this.lineStart = false;
+    }
+  }
+
+  firstTag(s: string, tags: string[]): { idx: number; tag: string } | null {
+    const context = this.clone();
+    for (let idx = 0; idx < s.length; idx++) {
+      context.consume(s[idx]!);
+      if (s[idx] !== '<' || context.inCode) continue;
+      const tag = tags.find((candidate) => s.startsWith(candidate, idx));
+      if (tag) return { idx, tag };
+    }
+    return null;
+  }
 }
 
 export class ThinkTagSplitter {
   private buf = '';
+  private code = new CodeContext();
   private mode: 'text' | 'thinking' = 'text';
   /** the provider sent thinking through its own field, so bare `</think>` in text is literal */
   private nativeThinking = false;
@@ -68,15 +125,15 @@ export class ThinkTagSplitter {
     const out: StreamEvent[] = [];
     for (;;) {
       if (this.mode === 'thinking') {
-        const close = firstOf(this.buf, CLOSE);
+        const close = this.code.firstTag(this.buf, CLOSE);
         if (!close) break;
         this.emit(out, this.buf.slice(0, close.idx));
         this.buf = this.buf.slice(close.idx + close.tag.length);
         this.mode = 'text';
         continue;
       }
-      const open = firstOf(this.buf, OPEN);
-      const close = firstOf(this.buf, CLOSE);
+      const open = this.code.firstTag(this.buf, OPEN);
+      const close = this.code.firstTag(this.buf, CLOSE);
       const canOpen = !!open && !this.started && this.buf.slice(0, open.idx).trim() === '';
       const canClose = !!close && !this.reclassified && !this.nativeThinking;
       if (canOpen && (!canClose || open!.idx < close!.idx)) {
@@ -112,6 +169,7 @@ export class ThinkTagSplitter {
 
   private emit(out: StreamEvent[], text: string) {
     if (!text) return;
+    for (const char of text) this.code.consume(char);
     if (this.mode === 'thinking') out.push({ type: 'thinking_delta', text });
     else {
       if (text.trim()) this.started = true;
