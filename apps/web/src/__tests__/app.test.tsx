@@ -94,11 +94,16 @@ describe('App renders without crashing', () => {
     expect(el.textContent).toContain('hello');
     const process = [...el.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')].find(b => b.textContent?.includes('执行过程'))!;
     expect(process.textContent).toContain('执行过程');
-    expect(process.getAttribute('aria-expanded')).toBe('false');
-    expect(el.textContent).not.toContain('mcp__a__b');
-    await act(async () => process.click());
+    // This snapshot ends after a tool result, so its preamble belongs to the
+    // process and there is no final answer to collapse it for yet.
+    expect(process.getAttribute('aria-expanded')).toBe('true');
+    expect(process.textContent).toContain('1 段过程说明');
     expect(el.textContent).toContain('mcp__a__b');
     expect(el.textContent).toContain('Thought process');
+    await act(async () => process.click());
+    expect(process.getAttribute('aria-expanded')).toBe('false');
+    expect(el.textContent).not.toContain('mcp__a__b');
+    expect(el.textContent).not.toContain('hello');
   });
   it('settings pages', async () => {
     for (const p of ['/settings/providers', '/settings/mcp', '/settings/skills']) {

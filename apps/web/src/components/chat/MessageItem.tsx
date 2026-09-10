@@ -19,6 +19,8 @@ interface Props {
   isLastAssistant?: boolean;
   /** The turn-level disclosure renders thinking and tools together. */
   hideProcess?: boolean;
+  /** Earlier text is rendered as progress in the turn-level disclosure. Original indices stay intact. */
+  textStartIndex?: number;
   /** false on the non-final messages of a multi-step assistant turn (see MessageList) */
   showFooter?: boolean;
   /** turn totals, shown on the message that closes a multi-step assistant turn */
@@ -27,7 +29,7 @@ interface Props {
   footerText?: string;
 }
 
-export const MessageItem = memo(function MessageItem({ message, streaming, results, onRegenerate, onEdit, isLastAssistant, hideProcess, showFooter = true, footerUsage, footerText }: Props) {
+export const MessageItem = memo(function MessageItem({ message, streaming, results, onRegenerate, onEdit, isLastAssistant, hideProcess, textStartIndex = 0, showFooter = true, footerUsage, footerText }: Props) {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -105,6 +107,7 @@ export const MessageItem = memo(function MessageItem({ message, streaming, resul
             case 'thinking':
               return hideProcess ? null : <ThinkingBlock key={i} text={b.thinking} streaming={!!streaming && i === message.content.length - 1} />;
             case 'text': {
+              if (i < textStartIndex) return null;
               const live = !!streaming && i === message.content.length - 1;
               return (
                 <div key={i} className={cn(live && 'cursor-blink')}>

@@ -23,6 +23,9 @@ const carrier = message('result', [result], { role: 'user' });
 const answer = (text: string) => message('answer', [thinking, { type: 'text', text }]);
 const disclosures = () => [...host.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')];
 const toggle = () => disclosures()[0]!;
+const processDetails = () => document.getElementById(toggle().getAttribute('aria-controls')!)!;
+const outsideProcess = () => [...host.querySelectorAll('[data-quote-text]')]
+  .filter(node => !processDetails().contains(node)).map(node => node.textContent).join('\n');
 const button = (text: string) => [...host.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.includes(text))!;
 const update = async (state: Partial<ReturnType<typeof useChat.getState>>) => {
   await act(async () => useChat.setState(state));
@@ -97,6 +100,13 @@ it('restores one collapsed disclosure per historical turn and keeps whole-turn c
   expect(toggle().getAttribute('aria-expanded')).toBe('false');
   expect(host.textContent).toContain('2 次思考');
   expect(host.textContent).toContain('1 次工具调用');
+  expect(host.textContent).toContain('1 段过程说明');
+  expect(host.textContent).not.toContain('Checking sources');
+  expect(outsideProcess()).toBe('Final answer');
+  await act(async () => toggle().click());
+  expect(processDetails().textContent).toContain('Checking sources');
+  expect(outsideProcess()).toBe('Final answer');
+  await act(async () => toggle().click());
   expect(host.textContent).toContain('30↑ 5↓');
   const copies = host.querySelectorAll<HTMLButtonElement>('button[title="Copy"]');
   expect(copies).toHaveLength(2); // user + the whole assistant reply
@@ -105,6 +115,51 @@ it('restores one collapsed disclosure per historical turn and keeps whole-turn c
   await update({ messages: [...useChat.getState().messages, { ...user, id: 'user-2' }], streaming: message('next', [thinking]), running: true });
   expect(disclosures()).toHaveLength(2);
   expect(disclosures().map(b => b.getAttribute('aria-expanded'))).toEqual(['false', 'true']);
+});
+
+it('moves streamed progress into the process when later reasoning arrives in the same message', async () => {
+  const progress: Block = { type: 'text', text: 'I will check the official report.' };
+  await update({ messages: [user], streaming: message('answer', [progress]), running: true });
+  await mount();
+  expect(disclosures()).toHaveLength(0);
+  expect(host.textContent).toContain(progress.text);
+  await update({ streaming: message('answer', [progress, thinking]) });
+  expect(toggle().getAttribute('aria-expanded')).toBe('true');
+  expect(processDetails().textContent).toContain(progress.text);
+  expect(outsideProcess()).toBe('');
+  const complete = message('answer', [progress, thinking, { type: 'text', text: 'Verified answer' }]);
+  await update({ streaming: complete });
+  expect(toggle().getAttribute('aria-expanded')).toBe('false');
+  expect(host.textContent).not.toContain(progress.text);
+  expect(outsideProcess()).toBe('Verified answer');
+  await update({ messages: [user, complete], streaming: null, running: false });
+  expect(outsideProcess()).toBe('Verified answer');
+});
+
+it('restores progress in order across calls, including tools without reasoning and a pending next step', async () => {
+  const progress = message('progress', [{ type: 'text', text: 'Searching official sources.' }]);
+  const search = message('step', [tool], { stopReason: 'tool_use' });
+  await update({ messages: [user, progress, search, carrier], streaming: message('next', []), running: true });
+  await mount();
+  expect(toggle().getAttribute('aria-expanded')).toBe('true');
+  expect(toggle().textContent).toContain('1 次工具调用');
+  expect(toggle().textContent).not.toContain('次思考');
+  expect(processDetails().textContent).toMatch(/Searching official sources\.[\s\S]*mcp__exa__web_search_exa/);
+  expect(outsideProcess()).toBe('');
+  await update({ streaming: message('next', [{ type: 'text', text: 'Final without thinking.' }]) });
+  expect(toggle().getAttribute('aria-expanded')).toBe('false');
+  expect(outsideProcess()).toBe('Final without thinking.');
+  expect(host.textContent).not.toContain('Searching official sources.');
+});
+
+it.each(['interrupted', 'error', 'max_tokens'] as const)('keeps progress accessible when a turn ends with %s before an answer', async stopReason => {
+  await update({ messages: [user, message('stopped', [{ type: 'text', text: 'Let me check this.' }, thinking, tool], { stopReason })] });
+  await mount();
+  expect(toggle().getAttribute('aria-expanded')).toBe('true');
+  expect(processDetails().textContent).toContain('Let me check this.');
+  expect(outsideProcess()).toBe('');
+  await act(async () => toggle().click());
+  expect(host.textContent).toContain({ interrupted: 'Interrupted', error: 'Error (partial output)', max_tokens: 'Output hit max_tokens' }[stopReason]);
 });
 
 it('keeps failure counts and interrupted output visible when the process is collapsed', async () => {
@@ -127,9 +182,13 @@ it('renders plain replies without a process control and opens artifacts at their
   expect(host.textContent).toContain('Plain answer');
   const source = '```html artifact id="demo" title="Demo"\n<h1>Artifact content</h1>\n```';
   vi.spyOn(api.artifacts, 'list').mockResolvedValue([]);
-  await update({ messages: [user, message('artifact', [thinking, { type: 'text', text: source }])] });
+  await update({ messages: [user, message('artifact', [thinking, { type: 'text', text: source }, tool, { type: 'text', text: 'The artifact is ready.' }])] });
   await act(async () => root.render(<ArtifactWorkspace conversationId="chat"><MessageList /></ArtifactWorkspace>));
   expect(toggle().getAttribute('aria-expanded')).toBe('false');
+  expect(host.textContent).not.toContain('Demo');
+  await act(async () => toggle().click());
+  expect(processDetails().textContent).toContain('Demo');
+  expect(outsideProcess()).toBe('The artifact is ready.');
   await act(async () => button('Demo').click());
   expect(host.querySelector('iframe')?.srcdoc).toContain('<h1>Artifact content</h1>');
 });
