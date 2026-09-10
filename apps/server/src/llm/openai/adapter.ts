@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { isOfficialDeepSeek } from './deepseek.js';
 import type { StreamEvent, StopReason } from '@aichat/shared';
 import type { LLMAdapter, LLMModelInfo, LLMRequest } from '../types.js';
 import type { ProviderSecret } from '../../db/repos/providers.js';
@@ -29,9 +30,11 @@ export class OpenAIAdapter implements LLMAdapter {
   readonly type = 'openai' as const;
   private client: OpenAI;
   private compat: ProviderSecret['compat'];
+  private officialDeepSeek: boolean;
 
   constructor(p: ProviderSecret) {
     this.compat = p.compat;
+    this.officialDeepSeek = isOfficialDeepSeek(p);
     this.client = new OpenAI({
       apiKey: p.apiKey || 'missing',
       baseURL: p.baseUrl,
@@ -53,6 +56,12 @@ export class OpenAIAdapter implements LLMAdapter {
    */
   private applyReasoning(params: Record<string, unknown>, req: LLMRequest) {
     const level = req.reasoning;
+    if (this.officialDeepSeek) {
+      params.thinking = { type: level === 'off' ? 'disabled' : 'enabled' };
+      const effort = resolveEffortParam(level, req.reasoningMap, { minimal: 'low', medium: 'high', xhigh: 'high' });
+      if (effort) params.reasoning_effort = effort;
+      return;
+    }
     const format = this.compat.thinkingFormat ?? (this.compat.openaiThinkingObject ? 'zai' : 'openai');
     const effort = resolveEffortParam(level, req.reasoningMap);
     switch (format) {
@@ -78,7 +87,7 @@ export class OpenAIAdapter implements LLMAdapter {
   async *stream(req: LLMRequest): AsyncIterable<StreamEvent> {
     const params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
       model: req.model,
-      messages: toOpenAIMessages(req.system, req.messages),
+      messages: toOpenAIMessages(req.system, req.messages, this.officialDeepSeek && !!req.tools?.length),
       stream: true,
     };
     if (this.compat.streamOptions !== false) params.stream_options = { include_usage: true };

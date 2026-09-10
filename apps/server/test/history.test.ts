@@ -89,3 +89,14 @@ describe('budgeted history replay', () => {
     expect(shaped[1]!.content.some(b => b.type === 'thinking')).toBe(false);
   });
 });
+
+
+it('keeps official DeepSeek thinking through compaction and restart while clearing tool results', () => {
+  const history = [...turn('old', 60000), question('next')];
+  const shaped = shapeOldTurns(history, 'openai', true);
+  expect(shaped[1]).toEqual(history[1]);
+  expect(body(shaped[2]!)).toContain('Old tool result cleared');
+  expect(shapeOldTurns(JSON.parse(JSON.stringify(history)), 'openai', true)).toEqual(shaped);
+  expect(JSON.stringify(toOpenAIMessages(undefined, shaped, true))).toContain('"reasoning_content":"reasoning"');
+  expect(shapeOldTurns(history, 'openai')[1]!.content.some(b => b.type === 'thinking')).toBe(false);
+});

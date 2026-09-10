@@ -3,8 +3,8 @@ import { OpenAIAdapter } from '../src/llm/openai/adapter.js';
 import type { LLMRequest } from '../src/llm/types.js';
 
 /** Capture the params the adapter hands to the SDK for a given request. */
-async function captured(req: Partial<LLMRequest>, compat: Record<string, unknown> = {}) {
-  const adapter = new OpenAIAdapter({ id: 'p', name: 'p', type: 'openai', baseUrl: 'http://x', apiKey: 'k', extraHeaders: {}, compat, createdAt: '' });
+async function captured(req: Partial<LLMRequest>, compat: Record<string, unknown> = {}, baseUrl = 'http://x') {
+  const adapter = new OpenAIAdapter({ id: 'p', name: 'p', type: 'openai', baseUrl, apiKey: 'k', extraHeaders: {}, compat, createdAt: '' });
   let params: Record<string, unknown> | null = null;
   (adapter as unknown as { client: { chat: { completions: { create: (p: unknown) => { withResponse: () => Promise<never> } } } } }).client.chat.completions.create = (p: unknown) => {
     params = p as Record<string, unknown>;
@@ -58,5 +58,48 @@ describe('OpenAIAdapter reasoning dialects', () => {
     expect(p.reasoning_effort).toBe('high');
     const q = await captured({ reasoning: 'medium', reasoningMap: { medium: null } });
     expect(q.reasoning_effort).toBeUndefined();
+  });
+});
+
+const tool = { name: 'demo', description: 'demo', inputSchema: { type: 'object' } };
+const history: LLMRequest['messages'] = [
+  { role: 'user', content: [{ type: 'text', text: 'first' }] },
+  { role: 'assistant', content: [{ type: 'thinking', thinking: 'first thought' }, { type: 'text', text: 'answer' }] },
+  { role: 'user', content: [{ type: 'text', text: 'follow up' }] },
+  { role: 'assistant', content: [{ type: 'thinking', thinking: 'part1' }, { type: 'thinking', thinking: 'part2' }, { type: 'tool_use', id: 'call', name: 'demo', input: {} }] },
+  { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'call', content: [{ type: 'text', text: 'result' }], is_error: false }] },
+];
+describe('official DeepSeek endpoint', () => {
+  it.each(['https://api.deepseek.com', 'https://api.deepseek.com/v1/', 'https://api.deepseek.com/beta'])('replays all assistant reasoning with tools at %s', async baseUrl => {
+    const p = await captured({ messages: history, tools: [tool], reasoning: 'max' }, {}, baseUrl);
+    expect(p.thinking).toEqual({ type: 'enabled' });
+    expect(p.reasoning_effort).toBe('max');
+    expect(p.messages).toEqual([
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: 'answer', reasoning_content: 'first thought' },
+      { role: 'user', content: 'follow up' },
+      { role: 'assistant', content: null, reasoning_content: 'part1part2', tool_calls: [{ id: 'call', type: 'function', function: { name: 'demo', arguments: '{}' } }] },
+      { role: 'tool', tool_call_id: 'call', content: 'result' },
+    ]);
+  });
+  it('explicitly disables thinking and omits reasoning replay without tools', async () => {
+    const p = await captured({ messages: history, tools: [], reasoning: 'off' }, {}, 'https://api.deepseek.com/v1');
+    expect(p.thinking).toEqual({ type: 'disabled' });
+    expect(p.reasoning_effort).toBeUndefined();
+    expect(JSON.stringify(p.messages)).not.toContain('reasoning_content');
+  });
+  it.each([['minimal', 'low'], ['medium', 'high'], ['xhigh', 'high']] as const)('maps %s to %s', async (reasoning, expected) => {
+    const p = await captured({ reasoning }, {}, 'https://api.deepseek.com/v1');
+    expect(p.reasoning_effort).toBe(expected);
+  });
+  it('respects explicit effort mappings', async () => {
+    const p = await captured({ reasoning: 'max', reasoningMap: { max: 'high' } }, {}, 'https://api.deepseek.com/v1');
+    expect(p.reasoning_effort).toBe('high');
+  });
+  it.each(['https://gateway.example/v1', 'https://api.deepseek.com.example/v1', 'https://example.com/api.deepseek.com', 'http://api.deepseek.com/v1', 'https://api.deepseek.com:8443/v1', 'https://api.deepseek.com/custom'])('preserves custom behavior at %s', async baseUrl => {
+    const p = await captured({ messages: history, tools: [tool], reasoning: 'off' }, { thinkingFormat: 'deepseek' }, baseUrl);
+    expect(p.thinking).toBeUndefined();
+    expect(p.reasoning_effort).toBeUndefined();
+    expect(JSON.stringify(p.messages)).not.toContain('reasoning_content');
   });
 });

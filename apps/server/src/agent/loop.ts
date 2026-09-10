@@ -13,6 +13,7 @@ import { uuid } from '../util/id.js';
 import { config } from '../config.js';
 import { buildSystemPrompt } from './systemPrompt.js';
 import { shapeOldTurns } from './history.js';
+import { isOfficialDeepSeek } from '../llm/openai/deepseek.js';
 import { executeTool } from './toolRouter.js';
 import { toolResultsRepo } from '../db/repos/toolResults.js';
 import { stableToolDefs } from '../llm/tools.js';
@@ -106,7 +107,7 @@ export async function runAgent(opts: RunOptions): Promise<void> {
   const history: LLMMessage[] = [];
   // Replay stable prefixes; batch-compact old turns only when overhead crosses the budget.
   // Shape before hydrating so cleared media is never read from disk.
-  for (const m of shapeOldTurns(messagesRepo.list(conv.id), provider.type)) {
+  for (const m of shapeOldTurns(messagesRepo.list(conv.id), provider.type, isOfficialDeepSeek(provider) && tools.length > 0)) {
     history.push({ role: m.role, content: await hydrateBlocks(m.content, provider.type) });
   }
 

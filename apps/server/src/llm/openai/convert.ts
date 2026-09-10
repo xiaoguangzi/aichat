@@ -33,7 +33,7 @@ function userParts(blocks: Block[]): UserPart[] {
   return parts;
 }
 
-export function toOpenAIMessages(system: string | undefined, messages: LLMMessage[]): CM[] {
+export function toOpenAIMessages(system: string | undefined, messages: LLMMessage[], replayReasoning = false): CM[] {
   const out: CM[] = [];
   if (system) out.push({ role: 'system', content: system });
   for (const m of messages) {
@@ -43,7 +43,12 @@ export function toOpenAIMessages(system: string | undefined, messages: LLMMessag
         .map((b) => b.text)
         .join('');
       const toolUses = m.content.filter((b): b is Extract<Block, { type: 'tool_use' }> => b.type === 'tool_use');
-      const msg: OpenAI.Chat.Completions.ChatCompletionAssistantMessageParam = { role: 'assistant', content: text || null };
+      const msg: OpenAI.Chat.Completions.ChatCompletionAssistantMessageParam & { reasoning_content?: string } = { role: 'assistant', content: text || null };
+      if (replayReasoning) {
+        msg.reasoning_content = m.content
+          .filter((b): b is Extract<Block, { type: 'thinking' }> => b.type === 'thinking')
+          .map(b => b.thinking).join('');
+      }
       if (toolUses.length) {
         msg.tool_calls = toolUses.map((t) => ({
           id: t.id,
@@ -51,7 +56,7 @@ export function toOpenAIMessages(system: string | undefined, messages: LLMMessag
           function: { name: t.name, arguments: JSON.stringify(t.input ?? {}) },
         }));
       }
-      if (msg.content || msg.tool_calls) out.push(msg);
+      if (msg.content || msg.tool_calls || msg.reasoning_content) out.push(msg);
       continue;
     }
     // user: tool results become separate role:'tool' messages, rest becomes one user message

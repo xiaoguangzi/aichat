@@ -28,8 +28,9 @@ function clearOldToolResult(b: ToolResultBlock): ToolResultBlock {
   return { ...b, content: [...texts, { type: 'text', text: `[${media} media attachment(s) removed from this old tool result.]` }] };
 }
 
-function shapeOldMessage(m: LLMMessage): LLMMessage {
+function shapeOldMessage(m: LLMMessage, preserveThinking: boolean): LLMMessage {
   if (m.role === 'assistant') {
+    if (preserveThinking) return m;
     const content = m.content.filter(b => b.type !== 'thinking');
     return content.length === m.content.length ? m : { role: m.role, content };
   }
@@ -56,7 +57,7 @@ function replayCost(m: LLMMessage, protocol: ProviderType): number {
  * watermark; above it, compact oldest complete turns down to the low watermark. Current
  * tool loops and user/assistant prose are never compacted. Media cost is a rough weight,
  * not a tokenizer or a model context-window guarantee. */
-export function shapeOldTurns(messages: LLMMessage[], protocol: ProviderType = 'anthropic'): LLMMessage[] {
+export function shapeOldTurns(messages: LLMMessage[], protocol: ProviderType = 'anthropic', preserveThinking = false): LLMMessage[] {
   const out: LLMMessage[] = [];
   const turns: Array<{ start: number; end: number }> = [];
   let start = 0;
@@ -71,7 +72,7 @@ export function shapeOldTurns(messages: LLMMessage[], protocol: ProviderType = '
           const turn = turns[next++]!;
           for (let i = turn.start; i < turn.end; i++) {
             const before = out[i]!;
-            const after = shapeOldMessage(before);
+            const after = shapeOldMessage(before, preserveThinking);
             cost += replayCost(after, protocol) - replayCost(before, protocol);
             out[i] = after;
           }
