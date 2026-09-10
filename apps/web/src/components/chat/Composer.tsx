@@ -1,3 +1,4 @@
+import { resolveChatModel } from '../../lib/chat-model.js';
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react';
 import type { Attachment } from '@aichat/shared';
 import { Paperclip, Send, Square, X, Loader2 } from 'lucide-react';
@@ -27,7 +28,7 @@ export function Composer({ quote, starter }: { quote?: { text: string; conversat
   const fileRef = useRef<HTMLInputElement>(null);
 
   const activeModelId = current?.modelId ?? draftModelId;
-  const model = models.find((m) => m.id === activeModelId) ?? models.find((m) => m.isDefault);
+  const model = resolveChatModel(models, activeModelId);
 
   // Upload filter follows the model's declared input modalities; unknown model = allow everything.
   const canImage = model?.caps.image !== false;

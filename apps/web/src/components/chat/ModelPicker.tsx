@@ -1,3 +1,4 @@
+import { resolveChatModel } from '../../lib/chat-model.js';
 import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Cpu, Sparkles, Wrench, Eye } from 'lucide-react';
 import { useAllModels } from '../../store/settings';
@@ -15,8 +16,8 @@ export function ModelPicker() {
   const [open, setOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  const selectedModelId = current?.modelId ?? draftModelId ?? models.find((m) => m.isDefault)?.id ?? '';
-  const currentModel = models.find((m) => m.id === selectedModelId) ?? models[0];
+  const currentModel = resolveChatModel(models, current?.modelId ?? draftModelId);
+  const selectedModelId = currentModel?.id ?? '';
 
   useEffect(() => {
     if (!open) return;

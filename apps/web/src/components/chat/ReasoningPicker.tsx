@@ -1,3 +1,4 @@
+import { resolveChatModel } from '../../lib/chat-model.js';
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { Brain, Check, ChevronDown } from 'lucide-react';
@@ -42,7 +43,7 @@ export function ReasoningPicker() {
   const [position, setPosition] = useState<CSSProperties>({});
 
   const activeModelId = current?.modelId ?? draftModelId;
-  const model = models.find((m) => m.id === activeModelId) ?? models.find((m) => m.isDefault);
+  const model = resolveChatModel(models, activeModelId);
   const levels = model ? supportedReasoningLevels(model) : [];
 
   // The composer sits inside a scroll container. A portal avoids clipping by that

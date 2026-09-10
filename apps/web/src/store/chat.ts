@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { useSettings } from './settings.js';
+import { resolveChatModel } from '../lib/chat-model.js';
 import type { Block, ChatSSEEvent, Conversation, ConversationGroup, ConversationInput, ConversationSettings, Message, ReasoningLevel, ToolResultBlock } from '@aichat/shared';
 import { api, ApiError } from '../api/client.js';
 import { defaultReasoning, rememberReasoning } from '../lib/reasoning';
@@ -395,7 +397,7 @@ export const useChat = create<ChatState>((set, get) => {
         ...(state.draftSettings ?? {}),
         ...(input?.settings ?? {}),
       };
-      const modelId = input?.modelId ?? state.draftModelId ?? undefined;
+      const modelId = input?.modelId ?? resolveChatModel(useSettings.getState().allModels(), state.draftModelId)?.id ?? undefined;
       const groupId = input?.groupId ?? state.draftGroupId ?? undefined;
       const systemPrompt = input?.systemPrompt ?? (state.draftSystemPrompt || undefined);
       const conv = await api.conversations.create({ ...input, modelId, groupId, systemPrompt, settings });
