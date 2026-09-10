@@ -1,14 +1,14 @@
 import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { Message, ToolResultBlock, Usage } from '@aichat/shared';
+import type { Message, ToolResultBlock } from '@aichat/shared';
 import { useChat } from '../../store/chat';
 import { useSettings } from '../../store/settings';
 import { MessageItem } from './MessageItem';
+import { AssistantTurn } from './AssistantTurn.js';
 import { LogoMark } from '../ui/Logo';
 import { Sparkles } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { sumUsage } from '../../lib/usage';
 
-/** messages mounted synchronously on a conversation switch; the rest streams in right after */
+/** turns mounted synchronously on a conversation switch; the rest streams in right after */
 const TAIL = 12;
 
 export function MessageList() {
@@ -36,43 +36,27 @@ export function MessageList() {
   const visible = useMemo(() => messages.filter((m) => !(m.role === 'user' && m.content.every((b) => b.type === 'tool_result'))), [messages]);
   const lastAssistantId = useMemo(() => [...visible].reverse().find((m) => m.role === 'assistant')?.id, [visible]);
 
-  // One assistant turn is persisted as several messages when the model calls tools
-  // (model -> tools -> model -> …); the tool_result carriers in between are already filtered
-  // out of `visible`, so a run of adjacent assistant messages is one reply. Rendering each as
-  // its own block put a hover footer row plus the 28px list gap in the middle of that reply —
-  // the empty band the tool cards appeared to float in. Group the run instead: only the last
-  // message of it carries the footer, and the others cancel the list gap above them so the
-  // whole turn keeps the 10px rhythm its own thinking/tool cards use (28px gap + 10px margin).
+  // Keep a whole tool loop under one stable key, including its live -> persisted
+  // handoff. This preserves the reader's disclosure choice as new steps arrive.
   const groups = useMemo(() => {
     const chain = liveStreaming ? [...visible, liveStreaming] : visible;
-    const map = new Map<string, { continued: boolean; groupEnd: boolean; usage?: Usage; text?: string }>();
-    chain.forEach((m, i) => {
-      const continued = m.role === 'assistant' && chain[i - 1]?.role === 'assistant';
-      // A `tool_use` stop is mid-turn even before the next message exists, so no footer flashes
-      // in (and out again) under the tool cards between two steps of a running turn.
-      const groupEnd =
-        m.role === 'assistant' && chain[i + 1]?.role !== 'assistant' && !(running && m.stopReason === 'tool_use');
-      let usage: Usage | undefined;
-      let text: string | undefined;
-      if (groupEnd) {
-        let start = i;
-        while (start > 0 && chain[start - 1]!.role === 'assistant') start--;
-        const run = chain.slice(start, i + 1);
-        if (run.length > 1) {
-          // the turn's cost is the sum of the calls it took, not just the last one
-          usage = sumUsage(run.map(r => r.usage));
-          text = run
-            .flatMap((r) => r.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text))
-            .join('\n');
-        }
+    const turns: Message[][] = [];
+    for (const message of chain) {
+      const previous = turns.at(-1);
+      if (message.role === 'assistant' && previous?.[0]?.role === 'assistant') {
+        previous.push(message);
+      } else {
+        turns.push([message]);
       }
-      map.set(m.id, { continued, groupEnd, usage, text });
-    });
-    return map;
-  }, [visible, liveStreaming, running]);
+    }
+    return turns;
+  }, [visible, liveStreaming]);
 
   const onRegenerate = useCallback(() => void regenerate(), [regenerate]);
   const onEdit = useCallback((messageId: string, text: string) => void editAndResend(messageId, text), [editAndResend]);
+  // Expanding the process is an explicit reading action. Its height change must
+  // not pin the list to the bottom and move the newly opened cards out of view.
+  const onProcessToggle = useCallback(() => { stick.current = false; }, []);
 
   const inner = useRef<HTMLDivElement>(null);
   const pin = useCallback(() => {
@@ -148,12 +132,12 @@ export function MessageList() {
   }
 
   useEffect(() => {
-    if (budget >= visible.length) return;
+    if (budget >= groups.length) return;
     const t = setTimeout(() => startTransition(() => setBudget(Number.MAX_SAFE_INTEGER)), 0);
     return () => clearTimeout(t);
-  }, [budget, visible.length, currentId]);
+  }, [budget, groups.length, currentId]);
 
-  const rendered = budget >= visible.length ? visible : visible.slice(visible.length - budget);
+  const rendered = budget >= groups.length ? groups : groups.slice(groups.length - budget);
 
   const wasRunning = useRef(running);
   useLayoutEffect(() => {
@@ -163,8 +147,6 @@ export function MessageList() {
     wasRunning.current = running;
     pin();
   }, [rendered, liveStreaming, currentId, running, pin]);
-
-  const show = (m: Message) => m.role === 'assistant' || m.content.some((b) => b.type !== 'tool_result');
 
   return (
     <div ref={ref} className="flex-1 overflow-y-auto overscroll-y-none px-4 py-8">
@@ -200,28 +182,24 @@ export function MessageList() {
             )}
           </div>
         )}
-        {rendered.map((m) => {
-          const g = groups.get(m.id);
+        {rendered.map((turn) => {
+          const first = turn[0]!;
+          const last = turn.at(-1)!;
+          const active = running && turn === groups.at(-1);
           return (
-            <div key={m.id} className={cn('msg-item', g?.continued && '-mt-[2.375rem]')}>
-              <MessageItem
-                message={m}
+            <div key={first.id} className={cn(!active && 'msg-item')}>
+              {first.role === 'assistant' ? <AssistantTurn
+                messages={turn}
+                streamingId={liveStreaming?.id}
+                running={active}
                 results={results}
-                isLastAssistant={m.id === lastAssistantId && !running}
-                showFooter={m.role !== 'assistant' || !!g?.groupEnd}
-                footerUsage={g?.usage}
-                footerText={g?.text}
-                onRegenerate={m.role === 'assistant' ? onRegenerate : undefined}
-                onEdit={m.role === 'user' && !running ? onEdit : undefined}
-              />
+                isLastAssistant={last.id === lastAssistantId && !running}
+                onRegenerate={onRegenerate}
+                onProcessToggle={onProcessToggle}
+              /> : <MessageItem message={first} results={results} onEdit={!running ? onEdit : undefined} />}
             </div>
           );
         })}
-        {liveStreaming && show(liveStreaming) && (
-          <div className={cn(groups.get(liveStreaming.id)?.continued && '-mt-[2.375rem]')}>
-            <MessageItem message={liveStreaming} streaming results={results} />
-          </div>
-        )}
       </div>
     </div>
   );

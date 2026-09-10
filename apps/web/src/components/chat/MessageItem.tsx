@@ -17,6 +17,8 @@ interface Props {
   onRegenerate?: () => void;
   onEdit?: (messageId: string, text: string) => void;
   isLastAssistant?: boolean;
+  /** The turn-level disclosure renders thinking and tools together. */
+  hideProcess?: boolean;
   /** false on the non-final messages of a multi-step assistant turn (see MessageList) */
   showFooter?: boolean;
   /** turn totals, shown on the message that closes a multi-step assistant turn */
@@ -25,7 +27,7 @@ interface Props {
   footerText?: string;
 }
 
-export const MessageItem = memo(function MessageItem({ message, streaming, results, onRegenerate, onEdit, isLastAssistant, showFooter = true, footerUsage, footerText }: Props) {
+export const MessageItem = memo(function MessageItem({ message, streaming, results, onRegenerate, onEdit, isLastAssistant, hideProcess, showFooter = true, footerUsage, footerText }: Props) {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -101,7 +103,7 @@ export const MessageItem = memo(function MessageItem({ message, streaming, resul
         {message.content.map((b, i) => {
           switch (b.type) {
             case 'thinking':
-              return <ThinkingBlock key={i} text={b.thinking} streaming={!!streaming && i === message.content.length - 1} />;
+              return hideProcess ? null : <ThinkingBlock key={i} text={b.thinking} streaming={!!streaming && i === message.content.length - 1} />;
             case 'text': {
               const live = !!streaming && i === message.content.length - 1;
               return (
@@ -111,7 +113,7 @@ export const MessageItem = memo(function MessageItem({ message, streaming, resul
               );
             }
             case 'tool_use':
-              return <ToolCallCard key={b.id} call={b} result={results[b.id]} />;
+              return hideProcess ? null : <ToolCallCard key={b.id} call={b} result={results[b.id]} />;
             default:
               return null;
           }

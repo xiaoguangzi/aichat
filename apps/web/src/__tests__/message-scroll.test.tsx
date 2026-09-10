@@ -47,6 +47,22 @@ afterEach(async () => {
 });
 
 describe('message scroll following', () => {
+  it('keeps the reading position when the reader opens the process disclosure', async () => {
+    const el = await mount(1000);
+    const reply: Message = {
+      id: 'reply', conversationId: 'chat', seq: 1, role: 'assistant', createdAt: '',
+      content: [{ type: 'thinking', thinking: 'Inspect sources' }, { type: 'text', text: 'Answer' }],
+    };
+    await act(async () => useChat.setState({ messages: [reply] }));
+    el.dispatchEvent(new Event('scroll'));
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-expanded]')!.click());
+    height = 1400;
+    resize();
+    expect(el.scrollTop).toBe(500);
+    await streamUpdate();
+    expect(el.scrollTop).toBe(500);
+  });
+
   it('resumes for the next turn, but lets the reader pause again during that reply', async () => {
     const el = await mount(1000);
     // The first reply has finished and the reader has scrolled back through it.

@@ -92,6 +92,11 @@ describe('App renders without crashing', () => {
     const { el, errors } = await render('/c/c1');
     expect(errors, JSON.stringify(errors).slice(0, 2000)).toEqual([]);
     expect(el.textContent).toContain('hello');
+    const process = [...el.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')].find(b => b.textContent?.includes('执行过程'))!;
+    expect(process.textContent).toContain('执行过程');
+    expect(process.getAttribute('aria-expanded')).toBe('false');
+    expect(el.textContent).not.toContain('mcp__a__b');
+    await act(async () => process.click());
     expect(el.textContent).toContain('mcp__a__b');
     expect(el.textContent).toContain('Thought process');
   });
