@@ -17,6 +17,7 @@ import { isOfficialDeepSeek } from '../llm/openai/deepseek.js';
 import { executeTool } from './toolRouter.js';
 import { toolResultsRepo } from '../db/repos/toolResults.js';
 import { stableToolDefs } from '../llm/tools.js';
+import { apiTracesRepo } from '../db/repos/apiTraces.js';
 import { requestDiagnosticsRepo } from '../db/repos/requestDiagnostics.js';
 import { allocateToolResultBudgets, prepareToolResult, readResultTool, READ_RESULT_TOOL, readToolResult, resultTextChars } from './toolResults.js';
 
@@ -104,10 +105,12 @@ export async function runAgent(opts: RunOptions): Promise<void> {
   const reasoning = resolveReasoningLevel(model, settings.reasoning);
   const maxTokens = settings.maxTokens ?? model.maxOutput ?? 64000;
 
+  const storedMessages = messagesRepo.list(conv.id);
+  const turnId = [...storedMessages].reverse().find(m => m.role === 'user' && m.content.some(b => b.type !== 'tool_result'))?.id;
   const history: LLMMessage[] = [];
   // Replay stable prefixes; batch-compact old turns only when overhead crosses the budget.
   // Shape before hydrating so cleared media is never read from disk.
-  for (const m of shapeOldTurns(messagesRepo.list(conv.id), provider.type, isOfficialDeepSeek(provider) && tools.length > 0)) {
+  for (const m of shapeOldTurns(storedMessages, provider.type, isOfficialDeepSeek(provider) && tools.length > 0)) {
     history.push({ role: m.role, content: await hydrateBlocks(m.content, provider.type) });
   }
 
@@ -122,6 +125,7 @@ export async function runAgent(opts: RunOptions): Promise<void> {
 
     try {
       for await (const ev of adapter.stream({ model: model.modelId, system, messages: history, tools, maxTokens, temperature: settings.temperature ?? null, reasoning, adaptive: model.adaptive, reasoningMap: model.reasoningMap, signal,
+        onTrace: turnId ? apiTracesRepo.sink({ conversationId: conv.id, turnId, messageId: assistantId, providerId: provider.id, providerName: provider.name, purpose: 'chat' }) : undefined,
         onDiagnostic: (record) => {
           try { requestDiagnosticsRepo.save(conv.id, assistantId, provider.id, record); }
           catch { console.warn('Could not save local request diagnostics.'); }
@@ -163,10 +167,9 @@ export async function runAgent(opts: RunOptions): Promise<void> {
     } catch (e) {
       const aborted = signal.aborted;
       const payload = errorToPayload(e);
-      if (bb.hasContent() || aborted) {
-        const saved = messagesRepo.create({ conversationId: conv.id, role: 'assistant', content: bb.blocks, usage, stopReason: aborted ? 'interrupted' : 'error', id: assistantId });
-        await emit({ event: 'message_end', data: { messageId: assistantId, stopReason: saved.stopReason ?? 'error', message: saved } });
-      }
+      // Preserve failed attempts even when the provider returned no content.
+      const saved = messagesRepo.create({ conversationId: conv.id, role: 'assistant', content: bb.blocks, usage, stopReason: aborted ? 'interrupted' : 'error', id: assistantId });
+      await emit({ event: 'message_end', data: { messageId: assistantId, stopReason: saved.stopReason ?? 'error', message: saved } });
       if (!aborted) await emit({ event: 'error', data: { code: payload.code, message: payload.message } });
       return;
     }

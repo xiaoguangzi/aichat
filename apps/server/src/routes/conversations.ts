@@ -1,4 +1,6 @@
 import { Hono } from 'hono';
+import { apiTracesRepo } from '../db/repos/apiTraces.js';
+import { requestDiagnosticsRepo } from '../db/repos/requestDiagnostics.js';
 import { artifactEditSchema, collectArtifacts, conversationInputSchema } from '@aichat/shared';
 import { conversationsRepo } from '../db/repos/conversations.js';
 import { messagesRepo } from '../db/repos/messages.js';
@@ -95,4 +97,46 @@ conversationsRoute.post('/:id/artifacts', async (c) => {
   if (!message || message.conversationId !== c.req.param('id') ||
       !collectArtifacts([message]).some(a => a.id === input.artifactId && a.complete)) throw notFound('artifact');
   return c.json(artifactsRepo.create(message.conversationId, input), 201);
+});
+
+const isTurn = (m: { role: string; content: { type: string }[] }) => m.role === 'user' && m.content.some(b => b.type !== 'tool_result');
+
+/** Request log for a conversation (or one user turn). Older diagnostics rows fill in gaps without bodies. */
+conversationsRoute.get('/:id/traces', (c) => {
+  const conversationId = c.req.param('id');
+  if (!conversationsRepo.get(conversationId)) throw notFound('conversation');
+  const turnId = c.req.query('turnId') || undefined;
+  const messages = messagesRepo.list(conversationId);
+  // Every message belongs to the user turn that started its loop; title requests hang off the first turn.
+  const turnOf = new Map<string, string>();
+  let turn: string | undefined;
+  for (const m of messages) {
+    if (isTurn(m)) turn = m.id;
+    if (turn) turnOf.set(m.id, turn);
+  }
+  const firstTurn = messages.find(isTurn)?.id;
+  if (firstTurn) turnOf.set(`${conversationId}:title`, firstTurn);
+  if (turnId && ![...turnOf.values()].includes(turnId)) throw notFound('turn');
+  const records = apiTracesRepo.list(conversationId, turnId);
+  const captured = new Set(records.map(r => r.messageId));
+  // Older metadata remains useful, but never pretend its hashes are request bodies.
+  for (const row of requestDiagnosticsRepo.list(conversationId)) {
+    const owner = turnOf.get(row.messageId);
+    if (!owner || (turnId && owner !== turnId) || captured.has(row.messageId)) continue;
+    records.push({
+      ...row.data, id: `legacy-${row.id}`, conversationId, turnId: owner, messageId: row.messageId,
+      providerId: row.providerId, providerName: '', purpose: row.messageId.endsWith(':title') ? 'title' : 'chat',
+      attempt: 1, method: '', url: '', bodyAvailable: false,
+      notes: ['仅保留历史诊断摘要；未采集或已清理请求正文，无法还原完整 JSON'],
+    });
+  }
+  records.sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+  return c.json(records.map(record => record.status === 'running' && !activeRuns.has(conversationId)
+    ? { ...record, status: 'interrupted', notes: [...record.notes, '运行已结束或服务已重启，未收到请求结束记录'] } : record));
+});
+
+conversationsRoute.get('/:id/traces/:traceId', (c) => {
+  const record = apiTracesRepo.get(c.req.param('id'), c.req.param('traceId'));
+  if (!record) throw notFound('API trace');
+  return c.json(record);
 });

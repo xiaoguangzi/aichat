@@ -69,7 +69,10 @@ export const messagesRepo = {
   },
   /** Delete this message and everything after it in the conversation. */
   deleteFrom(conversationId: string, seq: number) {
-    getDb().prepare('DELETE FROM messages WHERE conversation_id = ? AND seq >= ?').run(conversationId, seq);
+    const db = getDb();
+    db.prepare('DELETE FROM api_traces WHERE conversation_id = ? AND message_id IN (SELECT id FROM messages WHERE conversation_id = ? AND seq >= ?)').run(conversationId, conversationId, seq);
+    db.prepare('DELETE FROM request_diagnostics WHERE conversation_id = ? AND message_id IN (SELECT id FROM messages WHERE conversation_id = ? AND seq >= ?)').run(conversationId, conversationId, seq);
+    db.prepare('DELETE FROM messages WHERE conversation_id = ? AND seq >= ?').run(conversationId, seq);
   },
   delete(id: string) {
     getDb().prepare('DELETE FROM messages WHERE id = ?').run(id);

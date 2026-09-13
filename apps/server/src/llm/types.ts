@@ -1,4 +1,5 @@
 import type { Block, ReasoningLevel, ReasoningMap, StreamEvent, ToolDef } from '@aichat/shared';
+import type { TraceSink } from './trace.js';
 import type { RequestDiagnostic } from './diagnostics.js';
 
 /** Provider-agnostic message shape sent to adapters (no ids / persistence fields). */
@@ -8,6 +9,7 @@ export interface LLMMessage {
 }
 
 export interface LLMRequest {
+  onTrace?: TraceSink;
   onDiagnostic?: (record: RequestDiagnostic) => void;
   model: string;
   system?: string;

@@ -4,10 +4,12 @@ import { initDb, closeDb } from './db/database.js';
 import { mcpManager } from './mcp/manager.js';
 import { skillRegistry } from './skills/registry.js';
 import { createApp } from './app.js';
+import { apiTracesRepo } from './db/repos/apiTraces.js';
 import { stopAllRuns } from './agent/runs.js';
 
 ensureDirs();
 initDb();
+apiTracesRepo.interruptPending();
 skillRegistry.scan();
 skillRegistry.watch();
 void mcpManager.init();

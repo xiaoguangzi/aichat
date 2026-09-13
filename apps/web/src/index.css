@@ -386,6 +386,7 @@ button, a, input, textarea { -webkit-tap-highlight-color: transparent; }
 button:focus-visible, a:focus-visible { outline: 2px solid var(--color-accent-400); outline-offset: 3px; }
 @media (max-width: 1100px) {
   .chat-sidebar { width: 250px; }
+  .request-log-panel { position: fixed; inset: 0 0 0 auto; z-index: 50; width: min(32rem, 100vw); }
   .starter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .starter-card { padding: 16px; }
   .landing-body { padding-top: 40px; }

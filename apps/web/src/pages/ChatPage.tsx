@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { SlidersHorizontal, Download, X, Folder, FolderInput, PanelLeft } from 'lucide-react';
+import { SlidersHorizontal, Download, X, Folder, FolderInput, PanelLeft, Activity } from 'lucide-react';
 import { useChat } from '../store/chat';
 import { useSettings } from '../store/settings';
 import { ConversationList } from '../components/chat/ConversationList';
@@ -10,6 +10,7 @@ import { Composer } from '../components/chat/Composer';
 import { ModelPicker } from '../components/chat/ModelPicker';
 import { ApprovalBanner } from '../components/chat/ApprovalBanner';
 import { ConversationSettingsPanel } from '../components/chat/ConversationSettings';
+import { RequestLogPanel } from '../components/chat/RequestLogPanel.js';
 import { GroupMenu } from '../components/chat/GroupMenu';
 import { ArtifactWorkspace, useArtifacts } from '../components/artifacts/ArtifactWorkspace.js';
 import { api } from '../api/client';
@@ -32,6 +33,7 @@ export function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const landing = !current && messages.length === 0;
   const [showSettings, setShowSettings] = useState(false);
+  const [showLog, setShowLog] = useState(false);
   const [groupMenuAt, setGroupMenuAt] = useState<DOMRect | null>(null);
 
   useEffect(() => { void loadAll(); }, [loadAll]);
@@ -106,6 +108,18 @@ export function ChatPage() {
           <ArtifactPicker />
           <div className="header-model"><ModelPicker /></div>
           {current && (
+            <button
+              type="button"
+              onClick={() => setShowLog(!showLog)}
+              className={cn(iconBtn, showLog && 'bg-zinc-200/70 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200')}
+              title="请求日志"
+              aria-label="请求日志"
+              aria-pressed={showLog}
+            >
+              <Activity size={15} />
+            </button>
+          )}
+          {current && (
             <a
               href={api.conversations.exportUrl(current.id)}
               download
@@ -145,6 +159,7 @@ export function ChatPage() {
       </main>
       </ArtifactWorkspace>
       {showSettings && <ConversationSettingsPanel onClose={() => setShowSettings(false)} />}
+      {showLog && current && <RequestLogPanel conversationId={current.id} onClose={() => setShowLog(false)} />}
       </div>
     </div>
   );

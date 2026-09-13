@@ -7,6 +7,7 @@ import { toAnthropicMessages, toAnthropicTools } from './convert.js';
 import { AppError } from '../../util/errors.js';
 import { anthropicUsage } from '../usage.js';
 import { requestDiagnostics } from '../diagnostics.js';
+import { traceRequests } from '../trace.js';
 import { applyPromptCaching, supportsPromptCaching } from './cache.js';
 
 function mapStop(reason: string | null): StopReason {
@@ -31,7 +32,8 @@ export class AnthropicAdapter implements LLMAdapter {
   private compat: ProviderSecret['compat'];
   private promptCaching: boolean;
 
-  constructor(p: ProviderSecret) {
+  constructor(private provider: ProviderSecret) {
+    const p = this.provider;
     this.compat = p.compat;
     this.promptCaching = supportsPromptCaching(p.baseUrl, p.compat.promptCaching);
     this.client = new Anthropic({
@@ -84,10 +86,12 @@ export class AnthropicAdapter implements LLMAdapter {
     }
 
     if (this.promptCaching) applyPromptCaching(params);
-    const record = requestDiagnostics('anthropic', params, req.onDiagnostic);
+    const trace = traceRequests(this.provider, req.model, req.onTrace);
+    const client = trace.fetch ? this.client.withOptions({ fetch: trace.fetch }) : this.client;
+    const record = requestDiagnostics('anthropic', params, result => { trace.finish(result); req.onDiagnostic?.(result); });
     let stream: ReturnType<Anthropic['messages']['stream']>;
     try {
-      stream = this.client.messages.stream(params, { signal: req.signal });
+      stream = client.messages.stream(params, { signal: req.signal });
     } catch (e) {
       record({ status: req.signal?.aborted ? 'interrupted' : 'error' });
       throw wrapError(e);

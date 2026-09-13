@@ -28,6 +28,9 @@ for PAIR in "openai:$MO" "anthropic:$MA"; do
   C=$(curl -sf $J -d '{"modelId":"'$MID'"}' $B/conversations | node -pe 'JSON.parse(require("fs").readFileSync(0)).id')
   curl -sN $J -d '{"text":"hello world"}' $B/conversations/$C/messages | grep -E '^event:' | sort | uniq -c | sort -rn | tr '\n' ' '; echo
   echo "messages: $(curl -sf $B/conversations/$C | node -pe 'const c=JSON.parse(require("fs").readFileSync(0)); c.title+" | "+c.messages.map(m=>m.role+":"+m.content.map(b=>b.type).join("+")).join(", ")')"
+  # Request log: every upstream attempt of the loop, with the raw SSE reply kept for inspection.
+  TID=$(curl -sf "$B/conversations/$C/traces" | node -pe 'const t=JSON.parse(require("fs").readFileSync(0)); const chat=t.filter(r=>r.purpose==="chat"); if(chat.length<1||chat.some(r=>r.status!=="complete"||!r.bodyAvailable||!r.rawUsage)){console.error("FAIL: request log incomplete",JSON.stringify(t.map(r=>[r.purpose,r.status,r.bodyAvailable])));process.exit(1)} console.error("traces: "+t.map(r=>r.purpose+":"+r.status+":"+r.httpStatus+":"+r.responseBytes+"B").join(", ")); chat[0].id')
+  curl -sf "$B/conversations/$C/traces/$TID" | node -pe 'const d=JSON.parse(require("fs").readFileSync(0)); if(!d.requestBody||!d.requestBody.model||typeof d.responseBody!=="string"||!d.responseBody.includes("data:")||!d.responseHeaders["content-type"]){console.error("FAIL: trace detail lacks request JSON or raw SSE");process.exit(1)} "trace detail OK"'
 done
 
 echo "== office upload (docx -> extracted text reaches the provider)"

@@ -2,6 +2,8 @@ import type { Conversation } from '@aichat/shared';
 import { resolveReasoningLevel } from '@aichat/shared';
 import { modelsRepo, providersRepo } from '../db/repos/providers.js';
 import { settingsRepo } from '../db/repos/settings.js';
+import { messagesRepo } from '../db/repos/messages.js';
+import { apiTracesRepo } from '../db/repos/apiTraces.js';
 import { requestDiagnosticsRepo } from '../db/repos/requestDiagnostics.js';
 import { getAdapter } from '../llm/registry.js';
 
@@ -16,12 +18,14 @@ export async function generateTitle(conv: Conversation, userText: string, assist
     if (!provider) return null;
     const timeout = AbortSignal.timeout(15_000);
     const titleSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
+    const turnId = messagesRepo.list(conv.id).find(m => m.role === 'user' && m.content.some(b => b.type !== 'tool_result'))?.id;
     let out = '';
     const prompt = `Write a concise title (max 8 words, no quotes, same language as the conversation) for this chat.\n\nUser: ${userText.slice(0, 600)}\n\nAssistant: ${assistantText.slice(0, 600)}\n\nTitle:`;
     for await (const ev of getAdapter(provider).stream({
       model: model.modelId, messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
       maxTokens: Math.min(model.maxOutput ?? 512, 512), reasoning: resolveReasoningLevel(model, 'off'),
       adaptive: model.adaptive, reasoningMap: model.reasoningMap, signal: titleSignal,
+      onTrace: turnId ? apiTracesRepo.sink({ conversationId: conv.id, turnId, messageId: `${conv.id}:title`, providerId: provider.id, providerName: provider.name, purpose: 'title' }) : undefined,
       onDiagnostic: record => {
         try { requestDiagnosticsRepo.save(conv.id, `${conv.id}:title`, provider.id, record); }
         catch { console.warn('Could not save local title diagnostics.'); }

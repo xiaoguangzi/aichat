@@ -9,6 +9,7 @@ import { ToolCallAccumulator } from './toolCallAccumulator.js';
 import { AppError } from '../../util/errors.js';
 import { openAIUsage } from '../usage.js';
 import { requestDiagnostics } from '../diagnostics.js';
+import { traceRequests } from '../trace.js';
 
 function mapFinish(reason: string | null | undefined, hadTools: boolean): StopReason {
   switch (reason) {
@@ -32,7 +33,8 @@ export class OpenAIAdapter implements LLMAdapter {
   private compat: ProviderSecret['compat'];
   private officialDeepSeek: boolean;
 
-  constructor(p: ProviderSecret) {
+  constructor(private provider: ProviderSecret) {
+    const p = this.provider;
     this.compat = p.compat;
     this.officialDeepSeek = isOfficialDeepSeek(p);
     this.client = new OpenAI({
@@ -106,10 +108,12 @@ export class OpenAIAdapter implements LLMAdapter {
     let requestId: string | null | undefined;
     let responseId: string | undefined;
     let complete = false;
-    const record = requestDiagnostics('openai', params, req.onDiagnostic);
+    const trace = traceRequests(this.provider, req.model, req.onTrace);
+    const client = trace.fetch ? this.client.withOptions({ fetch: trace.fetch }) : this.client;
+    const record = requestDiagnostics('openai', params, result => { trace.finish(result); req.onDiagnostic?.(result); });
 
     try {
-      const response = await this.client.chat.completions.create(params, { signal: req.signal }).withResponse();
+      const response = await client.chat.completions.create(params, { signal: req.signal }).withResponse();
       requestId = response.request_id;
       const stream = response.data;
       for await (const chunk of stream) {

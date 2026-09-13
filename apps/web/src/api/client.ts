@@ -1,4 +1,4 @@
-import type { Attachment, Conversation, ConversationGroup, GroupInput, GroupPatch, McpServer, McpServerInput, McpToolInfo, Message, Model, ModelInput, Provider, ProviderInput, SkillInfo, ConversationInput } from '@aichat/shared';
+import type { ApiTrace, ApiTraceDetail, Attachment, Conversation, ConversationGroup, GroupInput, GroupPatch, McpServer, McpServerInput, McpToolInfo, Message, Model, ModelInput, Provider, ProviderInput, SkillInfo, ConversationInput } from '@aichat/shared';
 import type { ArtifactEdit, AppSettings } from '@aichat/shared';
 
 export class ApiError extends Error {
@@ -60,6 +60,10 @@ export const api = {
     deleteFrom: (id: string, mid: string) => req<{ ok: true }>('DELETE', `/api/conversations/${id}/messages/${mid}`),
     stop: (id: string) => req<{ ok: boolean }>('POST', `/api/conversations/${id}/stop`),
     exportUrl: (id: string) => `/api/conversations/${id}/export`,
+  },
+  traces: {
+    list: (id: string, turnId?: string) => req<ApiTrace[]>('GET', `/api/conversations/${id}/traces${turnId ? `?turnId=${encodeURIComponent(turnId)}` : ''}`),
+    get: (id: string, traceId: string) => req<ApiTraceDetail>('GET', `/api/conversations/${id}/traces/${traceId}`),
   },
   artifacts: {
     list: (id: string) => req<ArtifactEdit[]>('GET', `/api/conversations/${id}/artifacts`),
