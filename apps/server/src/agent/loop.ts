@@ -16,6 +16,7 @@ import { shapeOldTurns } from './history.js';
 import { isOfficialDeepSeek } from '../llm/openai/deepseek.js';
 import { executeTool } from './toolRouter.js';
 import { toolResultsRepo } from '../db/repos/toolResults.js';
+import { TurnTimer } from './timing.js';
 import { stableToolDefs } from '../llm/tools.js';
 import { apiTracesRepo } from '../db/repos/apiTraces.js';
 import { requestDiagnosticsRepo } from '../db/repos/requestDiagnostics.js';
@@ -88,6 +89,8 @@ export class BlockBuilder {
 }
 
 export async function runAgent(opts: RunOptions): Promise<void> {
+  const timer = new TurnTimer();
+  let lastAssistantId: string | undefined;
   const { emit, signal } = opts;
   const conv = opts.conversation;
   const { model, provider } = resolveModel(conv);
@@ -114,109 +117,124 @@ export async function runAgent(opts: RunOptions): Promise<void> {
     history.push({ role: m.role, content: await hydrateBlocks(m.content, provider.type) });
   }
 
-  for (let iter = 0; iter < config.maxAgentIterations; iter++) {
-    if (signal.aborted) return;
-    const assistantId = uuid();
-    const bb = new BlockBuilder();
-    let usage: Usage | null = null;
-    let stopReason: StopReason = 'other';
-    let refusal: { category?: string | null; explanation?: string | null } | undefined;
-    await emit({ event: 'message_start', data: { messageId: assistantId, role: 'assistant' } });
+  try {
+    for (let iter = 0; iter < config.maxAgentIterations; iter++) {
+      if (signal.aborted) return;
+      const assistantId = uuid();
+      const bb = new BlockBuilder();
+      let usage: Usage | null = null;
+      let stopReason: StopReason = 'other';
+      let refusal: { category?: string | null; explanation?: string | null } | undefined;
+      await emit({ event: 'message_start', data: { messageId: assistantId, role: 'assistant' } });
 
-    try {
-      for await (const ev of adapter.stream({ model: model.modelId, system, messages: history, tools, maxTokens, temperature: settings.temperature ?? null, reasoning, adaptive: model.adaptive, reasoningMap: model.reasoningMap, signal,
-        onTrace: turnId ? apiTracesRepo.sink({ conversationId: conv.id, turnId, messageId: assistantId, providerId: provider.id, providerName: provider.name, purpose: 'chat' }) : undefined,
-        onDiagnostic: (record) => {
-          try { requestDiagnosticsRepo.save(conv.id, assistantId, provider.id, record); }
-          catch { console.warn('Could not save local request diagnostics.'); }
-        },
-      })) {
-        switch (ev.type) {
-          case 'text_delta':
-            bb.text(ev.text);
-            await emit({ event: 'text_delta', data: { text: ev.text } });
-            break;
-          case 'thinking_delta':
-            bb.thinking(ev.text, ev.signature);
-            if (ev.text) await emit({ event: 'thinking_delta', data: { text: ev.text } });
-            break;
-          case 'thinking_reclassify':
-            bb.reclassifyTextAsThinking();
-            await emit({ event: 'thinking_reclassify', data: {} });
-            break;
-          case 'tool_call_start':
-            bb.toolStart(ev.id, ev.name);
-            await emit({ event: 'tool_call_start', data: { id: ev.id, name: ev.name } });
-            break;
-          case 'tool_call_delta':
-            break;
-          case 'tool_call_end':
-            bb.toolEnd(ev.id, ev.input);
-            await emit({ event: 'tool_call', data: { id: ev.id, name: bb.toolName(ev.id), input: ev.input } });
-            break;
-          case 'usage':
-            usage = ev.usage;
-            await emit({ event: 'usage', data: ev.usage });
-            break;
-          case 'done':
-            stopReason = ev.stopReason;
-            refusal = ev.refusal;
-            break;
+      timer.startCall();
+      try {
+        for await (const ev of adapter.stream({ model: model.modelId, system, messages: history, tools, maxTokens, temperature: settings.temperature ?? null, reasoning, adaptive: model.adaptive, reasoningMap: model.reasoningMap, signal,
+          onTrace: turnId ? apiTracesRepo.sink({ conversationId: conv.id, turnId, messageId: assistantId, providerId: provider.id, providerName: provider.name, purpose: 'chat' }) : undefined,
+          onDiagnostic: (record) => {
+            try { requestDiagnosticsRepo.save(conv.id, assistantId, provider.id, record); }
+            catch { console.warn('Could not save local request diagnostics.'); }
+          },
+        })) {
+          timer.observe(ev);
+          switch (ev.type) {
+            case 'text_delta':
+              bb.text(ev.text);
+              await emit({ event: 'text_delta', data: { text: ev.text } });
+              break;
+            case 'thinking_delta':
+              bb.thinking(ev.text, ev.signature);
+              if (ev.text) await emit({ event: 'thinking_delta', data: { text: ev.text } });
+              break;
+            case 'thinking_reclassify':
+              bb.reclassifyTextAsThinking();
+              await emit({ event: 'thinking_reclassify', data: {} });
+              break;
+            case 'tool_call_start':
+              bb.toolStart(ev.id, ev.name);
+              await emit({ event: 'tool_call_start', data: { id: ev.id, name: ev.name } });
+              break;
+            case 'tool_call_delta':
+              break;
+            case 'tool_call_end':
+              bb.toolEnd(ev.id, ev.input);
+              await emit({ event: 'tool_call', data: { id: ev.id, name: bb.toolName(ev.id), input: ev.input } });
+              break;
+            case 'usage':
+              usage = ev.usage;
+              await emit({ event: 'usage', data: ev.usage });
+              break;
+            case 'done':
+              stopReason = ev.stopReason;
+              refusal = ev.refusal;
+              break;
+          }
         }
+      } catch (e) {
+        timer.finishCall(usage);
+        const aborted = signal.aborted;
+        const payload = errorToPayload(e);
+        // Preserve failed attempts even when the provider returned no content.
+        const saved = messagesRepo.create({ conversationId: conv.id, role: 'assistant', content: bb.blocks, usage, timing: timer.snapshot(), stopReason: aborted ? 'interrupted' : 'error', id: assistantId });
+        lastAssistantId = assistantId;
+        await emit({ event: 'message_end', data: { messageId: assistantId, stopReason: saved.stopReason ?? 'error', message: saved } });
+        if (!aborted) await emit({ event: 'error', data: { code: payload.code, message: payload.message } });
+        return;
       }
-    } catch (e) {
-      const aborted = signal.aborted;
-      const payload = errorToPayload(e);
-      // Preserve failed attempts even when the provider returned no content.
-      const saved = messagesRepo.create({ conversationId: conv.id, role: 'assistant', content: bb.blocks, usage, stopReason: aborted ? 'interrupted' : 'error', id: assistantId });
-      await emit({ event: 'message_end', data: { messageId: assistantId, stopReason: saved.stopReason ?? 'error', message: saved } });
-      if (!aborted) await emit({ event: 'error', data: { code: payload.code, message: payload.message } });
-      return;
-    }
 
-    if (signal.aborted) stopReason = 'interrupted';
-    if (stopReason === 'refusal' && refusal) {
-      bb.text(`\n\n> Request declined by the model's safety system${refusal.category ? ` (${refusal.category})` : ''}${refusal.explanation ? `: ${refusal.explanation}` : '.'}`);
-    }
-    const toolUses = bb.toolUses();
-    if (toolUses.length && stopReason !== 'interrupted') stopReason = 'tool_use';
-    const saved = messagesRepo.create({ conversationId: conv.id, role: 'assistant', content: bb.blocks, usage, stopReason, id: assistantId });
-    conversationsRepo.touch(conv.id);
-    await emit({ event: 'message_end', data: { messageId: assistantId, stopReason, message: saved } });
-    history.push({ role: 'assistant', content: bb.blocks });
-
-    if (stopReason !== 'tool_use' || !toolUses.length) return;
-
-    // Execute all tool calls in parallel, collect results into ONE user message.
-    const outcomes = await Promise.all(
-      toolUses.map(async (t) => {
-        const started = Date.now();
-        const r = await executeTool(t.name, t.input, { conversationId: conv.id, signal, emit });
-        const durationMs = Date.now() - started;
-        return { t, r, durationMs };
-      }),
-    );
-    const budgets = allocateToolResultBudgets(outcomes.map(({ r }) => resultTextChars(r.content)));
-    const results: Extract<Block, { type: 'tool_result' }>[] = [];
-    for (const [i, { t, r, durationMs }] of outcomes.entries()) {
-      // Reader pages keep the original resource and pagination, never create nested previews.
-      let content: Block[];
-      let resultId: string | undefined;
-      if (t.name === READ_RESULT_TOOL && !r.isError) {
-        content = resultTextChars(r.content) <= budgets[i]! ? r.content : readToolResult(conv.id, t.input, budgets[i]).content;
-      } else {
-        ({ content, resultId } = prepareToolResult(conv.id, t.name, r.content, budgets[i]));
+      timer.finishCall(usage);
+      if (signal.aborted) stopReason = 'interrupted';
+      if (stopReason === 'refusal' && refusal) {
+        bb.text(`\n\n> Request declined by the model's safety system${refusal.category ? ` (${refusal.category})` : ''}${refusal.explanation ? `: ${refusal.explanation}` : '.'}`);
       }
-      results.push({ type: 'tool_result', tool_use_id: t.id, content, is_error: r.isError, durationMs, resultId });
-      await emit({ event: 'tool_result', data: { toolUseId: t.id, content, isError: r.isError, durationMs } });
+      const toolUses = bb.toolUses();
+      if (toolUses.length && stopReason !== 'interrupted') stopReason = 'tool_use';
+      const saved = messagesRepo.create({ conversationId: conv.id, role: 'assistant', content: bb.blocks, usage, timing: timer.snapshot(), stopReason, id: assistantId });
+      lastAssistantId = assistantId;
+      conversationsRepo.touch(conv.id);
+      await emit({ event: 'message_end', data: { messageId: assistantId, stopReason, message: saved } });
+      history.push({ role: 'assistant', content: bb.blocks });
+
+      if (stopReason !== 'tool_use' || !toolUses.length) return;
+
+      // Execute all tool calls in parallel, collect results into ONE user message.
+      const outcomes = await Promise.all(
+        toolUses.map(async (t) => {
+          const started = Date.now();
+          const r = await executeTool(t.name, t.input, { conversationId: conv.id, signal, emit });
+          const durationMs = Date.now() - started;
+          return { t, r, durationMs };
+        }),
+      );
+      const budgets = allocateToolResultBudgets(outcomes.map(({ r }) => resultTextChars(r.content)));
+      const results: Extract<Block, { type: 'tool_result' }>[] = [];
+      for (const [i, { t, r, durationMs }] of outcomes.entries()) {
+        // Reader pages keep the original resource and pagination, never create nested previews.
+        let content: Block[];
+        let resultId: string | undefined;
+        if (t.name === READ_RESULT_TOOL && !r.isError) {
+          content = resultTextChars(r.content) <= budgets[i]! ? r.content : readToolResult(conv.id, t.input, budgets[i]).content;
+        } else {
+          ({ content, resultId } = prepareToolResult(conv.id, t.name, r.content, budgets[i]));
+        }
+        results.push({ type: 'tool_result', tool_use_id: t.id, content, is_error: r.isError, durationMs, resultId });
+        await emit({ event: 'tool_result', data: { toolUseId: t.id, content, isError: r.isError, durationMs } });
+      }
+      const resultMsg = messagesRepo.create({ conversationId: conv.id, role: 'user', content: results });
+      await emit({ event: 'message_start', data: { messageId: resultMsg.id, role: 'user' } });
+      await emit({ event: 'message_end', data: { messageId: resultMsg.id, stopReason: 'end_turn', message: resultMsg } });
+      history.push({ role: 'user', content: await hydrateBlocks(results, provider.type) });
+      if (signal.aborted) return;
     }
-    const resultMsg = messagesRepo.create({ conversationId: conv.id, role: 'user', content: results });
-    await emit({ event: 'message_start', data: { messageId: resultMsg.id, role: 'user' } });
-    await emit({ event: 'message_end', data: { messageId: resultMsg.id, stopReason: 'end_turn', message: resultMsg } });
-    history.push({ role: 'user', content: await hydrateBlocks(results, provider.type) });
-    if (signal.aborted) return;
+    await emit({ event: 'error', data: { code: 'max_iterations', message: `Stopped after ${config.maxAgentIterations} tool iterations.` } });
+  } finally {
+    // Include tool execution/approval even when stopped before the next model call.
+    if (lastAssistantId) {
+      const timing = timer.snapshot();
+      messagesRepo.update(lastAssistantId, { timing });
+      await emit({ event: 'timing', data: { messageId: lastAssistantId, timing } });
+    }
   }
-  await emit({ event: 'error', data: { code: 'max_iterations', message: `Stopped after ${config.maxAgentIterations} tool iterations.` } });
 }
 
 export function fallbackTitle(text: string): string {

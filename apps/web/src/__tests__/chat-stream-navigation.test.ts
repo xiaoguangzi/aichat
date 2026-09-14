@@ -35,6 +35,8 @@ let frames: Map<number, FrameRequestCallback>;
 
 beforeEach(async () => {
   vi.resetModules();
+  vi.mocked(streamChat).mockClear();
+  vi.mocked(resumeChat).mockClear();
   ({ useChat } = await import('../store/chat.js'));
   streams.clear();
   sends = [];
@@ -73,6 +75,19 @@ function start(id: string, text = 'partial reply') {
 }
 
 describe('stream state survives navigation', () => {
+  it('updates final timing without moving an assistant past its tool result', () => {
+    const stream = start('a');
+    const reply = message('a', 'reply-a', 'tool call');
+    const toolResult = { ...message('a', 'result-a', ''), role: 'user' as const, seq: 2 };
+    stream.emit({ event: 'message_end', data: { messageId: reply.id, stopReason: 'tool_use', message: reply } });
+    stream.emit({ event: 'message_end', data: { messageId: toolResult.id, stopReason: 'end_turn', message: toolResult } });
+    const timing = { firstTokenMs: 100, totalMs: 3000, generationMs: 500, outputTokens: 0, outputComplete: false };
+    stream.emit({ event: 'timing', data: { messageId: reply.id, timing } });
+    const messages = useChat.getState().messages;
+    expect(messages.slice(-2).map(m => m.id)).toEqual([reply.id, toolResult.id]);
+    expect(messages.find(m => m.id === reply.id)?.timing).toEqual(timing);
+  });
+
   it('attaches a freshly opened page to the server job without sending the question again', async () => {
     useChat.setState({ current: null });
     vi.mocked(api.conversations.get).mockResolvedValue({ ...conversation('a'), messages: [], running: true });

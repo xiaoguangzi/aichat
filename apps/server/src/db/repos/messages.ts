@@ -1,4 +1,4 @@
-import type { Block, Message, Role, StopReason, Usage } from '@aichat/shared';
+import type { Block, Message, Role, StopReason, TurnTiming, Usage } from '@aichat/shared';
 import { getDb, j } from '../database.js';
 import { nowIso, uuid } from '../../util/id.js';
 
@@ -9,6 +9,7 @@ interface Row {
   role: Role;
   content_json: string;
   usage_json: string | null;
+  timing_json: string | null;
   stop_reason: StopReason | null;
   created_at: string;
 }
@@ -20,6 +21,7 @@ const rowTo = (r: Row): Message => ({
   role: r.role,
   content: j.parse<Block[]>(r.content_json, []),
   usage: j.parse<Usage | null>(r.usage_json, null),
+  timing: j.parse<TurnTiming | null>(r.timing_json, null),
   stopReason: r.stop_reason,
   createdAt: r.created_at,
 });
@@ -34,14 +36,14 @@ export const messagesRepo = {
     const r = getDb().prepare('SELECT * FROM messages WHERE id = ?').get(id) as unknown as Row | undefined;
     return r ? rowTo(r) : null;
   },
-  create(input: { conversationId: string; role: Role; content: Block[]; usage?: Usage | null; stopReason?: StopReason | null; id?: string }): Message {
+  create(input: { conversationId: string; role: Role; content: Block[]; usage?: Usage | null; timing?: TurnTiming | null; stopReason?: StopReason | null; id?: string }): Message {
     const db = getDb();
     const seqRow = db.prepare('SELECT COALESCE(MAX(seq), 0) + 1 AS s FROM messages WHERE conversation_id = ?').get(input.conversationId) as {
       s: number;
     };
     const id = input.id ?? uuid();
     db.prepare(
-      'INSERT INTO messages(id,conversation_id,seq,role,content_json,usage_json,stop_reason,created_at) VALUES (?,?,?,?,?,?,?,?)',
+      'INSERT INTO messages(id,conversation_id,seq,role,content_json,usage_json,stop_reason,created_at,timing_json) VALUES (?,?,?,?,?,?,?,?,?)',
     ).run(
       id,
       input.conversationId,
@@ -51,18 +53,20 @@ export const messagesRepo = {
       input.usage ? j.str(input.usage) : null,
       input.stopReason ?? null,
       nowIso(),
+      input.timing ? j.str(input.timing) : null,
     );
     return this.get(id)!;
   },
-  update(id: string, input: Partial<{ content: Block[]; usage: Usage | null; stopReason: StopReason | null }>): Message | null {
+  update(id: string, input: Partial<{ content: Block[]; usage: Usage | null; timing: TurnTiming | null; stopReason: StopReason | null }>): Message | null {
     const cur = this.get(id);
     if (!cur) return null;
     getDb()
-      .prepare('UPDATE messages SET content_json=?, usage_json=?, stop_reason=? WHERE id=?')
+      .prepare('UPDATE messages SET content_json=?, usage_json=?, stop_reason=?, timing_json=? WHERE id=?')
       .run(
         j.str(input.content ?? cur.content),
         input.usage === undefined ? (cur.usage ? j.str(cur.usage) : null) : input.usage ? j.str(input.usage) : null,
         input.stopReason === undefined ? (cur.stopReason ?? null) : input.stopReason,
+        input.timing === undefined ? (cur.timing ? j.str(cur.timing) : null) : input.timing ? j.str(input.timing) : null,
         id,
       );
     return this.get(id);

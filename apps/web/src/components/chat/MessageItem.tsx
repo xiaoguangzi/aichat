@@ -8,7 +8,7 @@ import { ToolCallCard } from './ToolCallCard';
 import { PendingIndicator } from './PendingIndicator';
 import { Button } from '../ui/Button';
 import { cn, copyText } from '../../lib/utils';
-import { usageLabel } from '../../lib/usage';
+import { timingLabel, usageLabel } from '../../lib/usage.js';
 
 interface Props {
   message: Message;
@@ -138,7 +138,7 @@ export const MessageItem = memo(function MessageItem({ message, streaming, resul
           </div>
         )}
         {!streaming && showFooter && (
-          <div className="mt-2 flex items-center gap-1 text-xs text-zinc-400 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+          <div className="mt-2 flex flex-wrap items-center gap-1 text-xs text-zinc-400">
             <IconBtn title="Copy" onClick={async () => { if (await copyText(footerText ?? plain)) { setCopied(true); setTimeout(() => setCopied(false), 1200); } }}>
               {copied ? <Check size={13} className="text-accent-600 dark:text-accent-400" /> : <Copy size={13} />}
             </IconBtn>
@@ -150,6 +150,11 @@ export const MessageItem = memo(function MessageItem({ message, streaming, resul
             {(footerUsage ?? message.usage) && (
               <span title="输入↑ / 输出↓ tokens。≥ 表示统计不完整，仅为已知下限；缓存未报告不等于未命中。旧记录保留当时接口的输入口径。" className="ml-1.5 rounded px-1.5 py-0.5 text-[11px] font-mono tabular-nums text-zinc-400 bg-zinc-100 dark:bg-zinc-800/80">
                 {usageLabel((footerUsage ?? message.usage)!)}
+              </span>
+            )}
+            {message.timing && (
+              <span title="首字：本轮开始至首次正文、思考或工具调用输出。总时间：整轮耗时，包含工具执行及审批等待，不含标题生成。token/s：上游输出 tokens ÷ 各次模型调用首个输出后至流结束的累计时长，扣除首字等待和工具耗时；用量不完整时不估算。" className="rounded px-1.5 py-0.5 text-[11px] font-mono tabular-nums text-zinc-400 bg-zinc-100 dark:bg-zinc-800/80">
+                {timingLabel(message.timing)}
               </span>
             )}
           </div>

@@ -1,4 +1,11 @@
-import type { Usage } from '@aichat/shared';
+import type { TurnTiming, Usage } from '@aichat/shared';
+
+export function timingLabel(t: TurnTiming): string {
+  const seconds = (ms: number) => `${(ms / 1000).toFixed(2)}s`;
+  const speed = t.outputComplete && t.outputTokens > 0 && t.generationMs > 0
+    ? `${(t.outputTokens * 1000 / t.generationMs).toFixed(1)} token/s` : '— token/s';
+  return `首字 ${t.firstTokenMs === undefined ? '—' : seconds(t.firstTokenMs)} · 总时间 ${seconds(t.totalMs)} · ${speed}`;
+}
 
 export function sumUsage(items: Array<Usage | null | undefined>): Usage | undefined {
   const known = items.filter((u): u is Usage => u != null);

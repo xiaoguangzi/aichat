@@ -38,11 +38,22 @@ export interface Message {
   role: Role;
   content: Block[];
   usage?: Usage | null;
+  timing?: TurnTiming | null;
   stopReason?: StopReason | null;
   createdAt: string;
 }
 
 export type StopReason = 'end_turn' | 'tool_use' | 'max_tokens' | 'refusal' | 'interrupted' | 'error' | 'other';
+
+/** Cumulative metrics for this assistant turn, measured by the server. */
+export interface TurnTiming {
+  firstTokenMs?: number;
+  totalMs: number;
+  /** Sum of each model call's time after its first output; excludes tool execution. */
+  generationMs: number;
+  outputTokens: number;
+  outputComplete: boolean;
+}
 
 export interface Usage {
   /** New responses use total input, including cache reads/writes. Legacy records may use provider-specific input. */
@@ -103,6 +114,7 @@ export type ChatSSEEvent =
   | { event: 'tool_result'; data: { toolUseId: string; content: Block[]; isError: boolean; durationMs: number } }
   | { event: 'approval_required'; data: { requestId: string; tool: string; input: unknown } }
   | { event: 'usage'; data: Usage }
+  | { event: 'timing'; data: { messageId: string; timing: TurnTiming } }
   | { event: 'message_end'; data: { messageId: string; stopReason: StopReason; message: Message } }
   | { event: 'title'; data: { conversationId: string; title: string } }
   | { event: 'error'; data: { code: string; message: string } }

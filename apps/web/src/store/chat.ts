@@ -189,6 +189,10 @@ export const useChat = create<ChatState>((set, get) => {
         case 'usage':
           if (pendingStreaming) { pendingStreaming.usage = ev.data; scheduleFlush(); }
           break;
+        case 'timing':
+          publish({ messages: state.messages.map(m => m.id === ev.data.messageId ? { ...m, timing: ev.data.timing } : m) });
+          cacheMessages(convId, state.messages);
+          break;
         case 'message_end':
           pendingStreaming = null;
           publish({ messages: [...state.messages.filter((m) => m.id !== ev.data.messageId), ev.data.message], streaming: null, approval: null });

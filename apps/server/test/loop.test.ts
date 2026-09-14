@@ -104,6 +104,11 @@ describe('runAgent', () => {
     expect(msgs[2]!.content[0]).toMatchObject({ type: 'tool_result', tool_use_id: 't1', content: [{ type: 'text', text: 'echo:hi' }], is_error: false });
     expect(msgs[3]!.content).toEqual([{ type: 'text', text: 'done: hi' }]);
     expect(msgs[3]!.usage).toEqual({ input: 10, output: 5 });
+    expect(msgs[0]!.timing).toBeNull();
+    expect(msgs[3]!.timing).toMatchObject({ outputTokens: 5, outputComplete: false });
+    expect(msgs[3]!.timing!.firstTokenMs).toBeGreaterThanOrEqual(0);
+    expect(msgs[3]!.timing!.totalMs).toBeGreaterThanOrEqual(msgs[3]!.timing!.generationMs);
+    expect([...events].reverse().find(e => e.event === 'timing')?.data).toEqual({ messageId: msgs[3]!.id, timing: msgs[3]!.timing });
     // second request contained the tool result in history
     const second = calls[1] as { messages: Array<{ role: string }> };
     expect(second.messages.map((x) => x.role)).toEqual(['user', 'assistant', 'user']);

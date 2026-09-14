@@ -176,6 +176,24 @@ describe('background generation over real HTTP connections', () => {
     expect(modelSignal.aborted).toBe(true);
     expect(messagesRepo.list(id)[1]?.stopReason).toBe('interrupted');
     expect(messagesRepo.list(id)[1]?.content).toContainEqual({ type: 'text', text: 'reply before close' });
+    expect(messagesRepo.list(id)[1]?.timing).toMatchObject({ outputComplete: false });
+    expect(messagesRepo.list(id)[1]?.timing?.firstTokenMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('persists and emits the final total when stopped during tool approval', async () => {
+    mode = 'approval';
+    const stream = await connect(true);
+    await stream.until('approval_required');
+    const before = messagesRepo.list(id)[1]!.timing!;
+    const job = activeRuns.get(id)!;
+    job.abort.abort();
+    const event = await stream.until('timing');
+    await job.task;
+    const saved = messagesRepo.list(id)[1]!;
+    expect(saved.timing!.totalMs).toBeGreaterThan(before.totalMs);
+    expect(saved.timing!.generationMs).toBe(before.generationMs);
+    expect(event.data).toEqual({ messageId: saved.id, timing: saved.timing });
+    expect(executeScript).not.toHaveBeenCalled();
   });
 
   it('restores pending approval after close and does not run the script before approval', async () => {
@@ -208,5 +226,7 @@ describe('background generation over real HTTP connections', () => {
     expect(activeRuns.has(id)).toBe(false);
     expect(messagesRepo.list(id)[1]?.stopReason).toBe('error');
     expect(messagesRepo.list(id)[1]?.content).toHaveLength(2);
+    expect(messagesRepo.list(id)[1]?.timing?.totalMs).toBeGreaterThan(0);
+    expect(messagesRepo.list(id)[1]?.timing?.outputComplete).toBe(false);
   });
 });
