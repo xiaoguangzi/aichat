@@ -21,7 +21,7 @@ const user = message('user', [{ type: 'text', text: 'Find an answer' }], { role:
 const step = message('step', [thinking, tool], { stopReason: 'tool_use', usage: { input: 10, output: 2, inputTotalKnown: true } });
 const carrier = message('result', [result], { role: 'user' });
 const answer = (text: string) => message('answer', [thinking, { type: 'text', text }]);
-const disclosures = () => [...host.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')];
+const disclosures = () => [...host.querySelectorAll<HTMLButtonElement>('[data-message-scroller] button[aria-expanded]')];
 const toggle = () => disclosures()[0]!;
 const processDetails = () => document.getElementById(toggle().getAttribute('aria-controls')!)!;
 const outsideProcess = () => [...host.querySelectorAll('[data-quote-text]')]

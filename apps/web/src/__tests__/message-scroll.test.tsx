@@ -14,17 +14,20 @@ let height: number;
 
 async function mount(initialHeight: number) {
   height = initialHeight;
+  const observers = new Set<() => void>();
+  resize = () => { for (const callback of observers) callback(); };
   vi.stubGlobal('ResizeObserver', class {
-    constructor(callback: () => void) { resize = callback; }
+    callback: () => void;
+    constructor(callback: () => void) { this.callback = callback; observers.add(callback); }
     observe() {}
-    disconnect() {}
+    disconnect() { observers.delete(this.callback); }
   });
   useChat.setState({ current: null, messages: [], streaming: null, running: false, pendingResults: {} });
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
   await act(async () => root.render(<MessageList />));
-  const el = host.firstElementChild as HTMLDivElement;
+  const el = host.querySelector('[data-message-scroller]') as HTMLDivElement;
   let top = 0;
   Object.defineProperties(el, {
     clientHeight: { get: () => 500 },
@@ -47,6 +50,24 @@ afterEach(async () => {
 });
 
 describe('message scroll following', () => {
+  it('jumps to a question and keeps that position through stream growth, then resumes on a new turn', async () => {
+    const el = await mount(2000);
+    const question: Message = { id: 'question', conversationId: 'chat', seq: 1, role: 'user', createdAt: '', content: [{ type: 'text', text: 'Earlier question' }] };
+    await act(async () => useChat.setState({ messages: [question], running: true }));
+    const target = host.querySelector<HTMLElement>('[data-user-message-id="question"]')!;
+    target.scrollIntoView = vi.fn(() => { el.scrollTop = 150; });
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="提问导航"]')!.click());
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label^="跳转到第 1 条提问"]')!.click());
+    expect(target.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'instant' });
+    el.dispatchEvent(new Event('scroll'));
+    height = 2400;
+    await streamUpdate();
+    expect(el.scrollTop).toBe(150);
+    await act(async () => useChat.setState({ running: false }));
+    await act(async () => useChat.setState({ running: true }));
+    expect(el.scrollTop).toBe(1900);
+  });
+
   it('keeps the reading position when the reader opens the process disclosure', async () => {
     const el = await mount(1000);
     const reply: Message = {
