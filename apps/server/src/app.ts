@@ -14,6 +14,7 @@ import { errorToPayload } from './util/errors.js';
 import { httpLog } from './util/httpLog.js';
 import { config } from './config.js';
 import { settingsRoute } from './routes/settings.js';
+import { jevRoute } from './routes/jev.js';
 
 export function createApp() {
   const app = new Hono();
@@ -22,6 +23,7 @@ export function createApp() {
   app.get('/api/health', (c) => c.json({ ok: true, version: '0.1.0' }));
   app.route('/api/providers', providersRoute);
   app.route('/api/settings', settingsRoute);
+  app.route('/api/jev', jevRoute);
   app.route('/api/conversations', conversationsRoute);
   app.route('/api/groups', groupsRoute);
   app.route('/api', chatRoute);

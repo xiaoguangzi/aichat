@@ -5,6 +5,7 @@ import { ProvidersPage } from './pages/ProvidersPage';
 import { McpPage } from './pages/McpPage';
 import { SkillsPage } from './pages/SkillsPage';
 import { GeneralSettingsPage } from './pages/GeneralSettingsPage';
+import { JevPage } from './pages/JevPage.js';
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
         <Route index element={<Navigate to="providers" replace />} />
         <Route path="providers" element={<ProvidersPage />} />
         <Route path="general" element={<GeneralSettingsPage />} />
+        <Route path="jev" element={<JevPage />} />
         <Route path="mcp" element={<McpPage />} />
         <Route path="skills" element={<SkillsPage />} />
       </Route>

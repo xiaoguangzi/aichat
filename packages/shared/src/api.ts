@@ -3,6 +3,28 @@ import { z } from 'zod';
 export const appSettingsSchema = z.object({ titleModelId: z.string().min(1).nullable() }).strict();
 export type AppSettings = z.infer<typeof appSettingsSchema>;
 
+// TypeSafe System One is deliberately separate from chat providers and settings.
+const jevEntrySchema = z.union([z.string(), z.record(z.string(), z.json()), z.array(z.json()), z.null()]);
+export const jevQuestionSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('noul'), instructions: jevEntrySchema,
+    criteria: z.object({ true: jevEntrySchema.optional(), false: jevEntrySchema.optional() }).strict().optional() }).strict(),
+  z.object({ type: z.literal('choice'), instructions: jevEntrySchema,
+    criteria: z.record(z.string().min(1), jevEntrySchema).refine(v => Object.keys(v).length >= 1 && Object.keys(v).length <= 255, 'Choice 需要 1–255 个选项') }).strict(),
+  z.object({ type: z.literal('score'), instructions: jevEntrySchema,
+    criteria: z.array(jevEntrySchema).min(2).max(10) }).strict(),
+]);
+export const jevRequestSchema = z.object({
+  model: z.string().trim().min(1).max(200),
+  state: z.union([z.string().min(1), z.record(z.string(), z.json()), z.array(z.json())]),
+  questions: z.record(z.string().min(1), jevQuestionSchema).refine(v => Object.keys(v).length > 0, '至少添加一个问题'),
+}).strict();
+export type JevRequest = z.infer<typeof jevRequestSchema>;
+export const jevSettingsSchema = z.object({
+  model: z.string().trim().min(1).max(200),
+  apiKey: z.string().trim().max(4096).regex(/^[^\r\n]*$/).nullable().optional(),
+}).strict();
+export type JevSettingsInput = z.infer<typeof jevSettingsSchema>;
+
 export const reasoningLevelSchema = z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']);
 /** Partial<Record<ReasoningLevel, string | null>>: level → endpoint literal; null = unsupported level */
 export const reasoningMapSchema = z.partialRecord(reasoningLevelSchema, z.string().nullable());

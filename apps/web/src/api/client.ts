@@ -1,5 +1,6 @@
 import type { ApiTrace, ApiTraceDetail, Attachment, Conversation, ConversationGroup, GroupInput, GroupPatch, McpServer, McpServerInput, McpToolInfo, Message, Model, ModelInput, Provider, ProviderInput, SkillInfo, ConversationInput } from '@aichat/shared';
 import type { ArtifactEdit, AppSettings } from '@aichat/shared';
+import type { JevSettings, JevSettingsInput, JevRequest, JevResult } from '@aichat/shared';
 
 export class ApiError extends Error {
   constructor(
@@ -31,6 +32,11 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
 }
 
 export const api = {
+  jev: {
+    settings: () => req<JevSettings>('GET', '/api/jev/settings'),
+    saveSettings: (input: JevSettingsInput) => req<JevSettings>('PUT', '/api/jev/settings', input),
+    evaluate: (input: JevRequest) => req<JevResult>('POST', '/api/jev/evaluate', input),
+  },
   settings: {
     get: () => req<AppSettings>('GET', '/api/settings'),
     update: (input: AppSettings) => req<AppSettings>('PUT', '/api/settings', input),

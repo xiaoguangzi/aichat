@@ -7,6 +7,7 @@
 ## 功能一览
 
 - **多模型聊天** — 自定义服务地址和 API Key，获取或手动添加模型，切换模型与思考强度。
+- **Jev 决策** — 独立接入 TypeSafe System One API，提交状态与 Choice / Score / Noul 问题，查看结构化答案、概率和用量；配置与调用均独立于聊天模型。
 - **流式回复** — 展示生成过程与思考内容，支持停止、重新生成、编辑重发和引用回复。
 - **后台生成** — 切换会话或关闭网页后，后端继续生成；重新打开可恢复进度。后端需保持运行。
 - **Artifacts 工作区** — 预览 HTML、React、SVG、Mermaid 和 Markdown，编辑源码、切换版本、下载作品。
@@ -40,6 +41,12 @@ pnpm start
 内置 OpenAI、Anthropic、DeepSeek、OpenRouter 和 Ollama 配置模板，也可以自定义连接。模板用于填写连接信息，实际可用能力以所连接的端点为准。
 
 ## 使用扩展能力
+
+### Jev 决策
+
+打开 **设置 → Jev 决策**，填写 TypeSafe API Key，保存连接后即可运行内置示例或编写自己的问题。默认模型为 `jev-latest`，也可填写官方支持的版本 ID。State 支持文本或 JSON，Questions 使用 [TypeSafe 官方格式](https://docs.typesafe.ai/api)。页面展示逐题结果、概率、置信度、耗时与已报告的 token 用量。
+
+此入口直接调用 TypeSafe 官方 `POST /v1/systemone`，密钥仅保存在本机 SQLite 后端配置中。Jev 不加入聊天模型列表，不读取会话历史，也不触发工具循环或标题生成。页面请求和结果仅在当前页面保留；连接设置在刷新和重启后保留。
 
 ### Artifacts
 

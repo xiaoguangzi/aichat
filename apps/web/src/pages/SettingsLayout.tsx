@@ -7,6 +7,7 @@ import { useChat } from '../store/chat.js';
 const tabs = [
   { to: '/settings/general', label: '通用' },
   { to: '/settings/providers', label: '模型服务' },
+  { to: '/settings/jev', label: 'Jev 决策' },
   { to: '/settings/mcp', label: 'MCP Servers' },
   { to: '/settings/skills', label: 'Skills' },
 ];
