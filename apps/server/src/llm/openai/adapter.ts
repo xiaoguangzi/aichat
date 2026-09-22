@@ -10,6 +10,7 @@ import { AppError } from '../../util/errors.js';
 import { openAIUsage } from '../usage.js';
 import { requestDiagnostics } from '../diagnostics.js';
 import { traceRequests } from '../trace.js';
+import { retryXaioThinking } from '../xaio-retry.js';
 
 function mapFinish(reason: string | null | undefined, hadTools: boolean): StopReason {
   switch (reason) {
@@ -87,6 +88,11 @@ export class OpenAIAdapter implements LLMAdapter {
   }
 
   async *stream(req: LLMRequest): AsyncIterable<StreamEvent> {
+    const trace = traceRequests(this.provider, req.model, req.onTrace);
+    yield* retryXaioThinking(this.provider.baseUrl, req.signal, () => this.streamAttempt(req, trace));
+  }
+
+  private async *streamAttempt(req: LLMRequest, trace: ReturnType<typeof traceRequests>): AsyncIterable<StreamEvent> {
     const params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
       model: req.model,
       messages: toOpenAIMessages(req.system, req.messages, this.officialDeepSeek && !!req.tools?.length),
@@ -108,7 +114,6 @@ export class OpenAIAdapter implements LLMAdapter {
     let requestId: string | null | undefined;
     let responseId: string | undefined;
     let complete = false;
-    const trace = traceRequests(this.provider, req.model, req.onTrace);
     const client = trace.fetch ? this.client.withOptions({ fetch: trace.fetch }) : this.client;
     const record = requestDiagnostics('openai', params, result => { trace.finish(result); req.onDiagnostic?.(result); });
 

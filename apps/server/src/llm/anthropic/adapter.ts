@@ -8,6 +8,7 @@ import { AppError } from '../../util/errors.js';
 import { anthropicUsage } from '../usage.js';
 import { requestDiagnostics } from '../diagnostics.js';
 import { traceRequests } from '../trace.js';
+import { retryXaioThinking } from '../xaio-retry.js';
 import { applyPromptCaching, supportsPromptCaching } from './cache.js';
 
 function mapStop(reason: string | null): StopReason {
@@ -51,6 +52,11 @@ export class AnthropicAdapter implements LLMAdapter {
   }
 
   async *stream(req: LLMRequest): AsyncIterable<StreamEvent> {
+    const trace = traceRequests(this.provider, req.model, req.onTrace);
+    yield* retryXaioThinking(this.provider.baseUrl, req.signal, () => this.streamAttempt(req, trace));
+  }
+
+  private async *streamAttempt(req: LLMRequest, trace: ReturnType<typeof traceRequests>): AsyncIterable<StreamEvent> {
     const params: Anthropic.MessageStreamParams = {
       model: req.model,
       max_tokens: req.maxTokens,
@@ -86,7 +92,6 @@ export class AnthropicAdapter implements LLMAdapter {
     }
 
     if (this.promptCaching) applyPromptCaching(params);
-    const trace = traceRequests(this.provider, req.model, req.onTrace);
     const client = trace.fetch ? this.client.withOptions({ fetch: trace.fetch }) : this.client;
     const record = requestDiagnostics('anthropic', params, result => { trace.finish(result); req.onDiagnostic?.(result); });
     let stream: ReturnType<Anthropic['messages']['stream']>;
