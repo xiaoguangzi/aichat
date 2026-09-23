@@ -3,7 +3,7 @@ import { Brain, ChevronDown } from 'lucide-react';
 import { Markdown } from '../ui/Markdown';
 import { cn } from '../../lib/utils';
 
-export function ThinkingBlock({ text, streaming, summary = false }: { text: string; streaming: boolean; summary?: boolean }) {
+export function ThinkingBlock({ text, streaming }: { text: string; streaming: boolean }) {
   const [open, setOpen] = useState(streaming);
 
   useEffect(() => {
@@ -36,7 +36,7 @@ export function ThinkingBlock({ text, streaming, summary = false }: { text: stri
         >
           <Brain size={12} className={cn(streaming && 'pulse-dot')} />
         </div>
-        <span className="font-medium">{streaming ? 'Thinking…' : summary ? '思考摘要' : '思考内容'}</span>
+        <span className="font-medium">{streaming ? 'Thinking…' : 'Thought process'}</span>
         {streaming && <span className="pulse-dot text-accent-500">···</span>}
         <span className="ml-auto text-[11px] text-zinc-400">
           {open ? 'Hide' : 'Show'}

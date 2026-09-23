@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import type { Message, ToolResultBlock } from '@aichat/shared';
 import { ChevronDown, ListTree, Loader2 } from 'lucide-react';
 import { sumUsage } from '../../lib/usage.js';
@@ -7,7 +7,6 @@ import { MessageItem } from './MessageItem.js';
 import { ThinkingBlock } from './ThinkingBlock.js';
 import { ToolCallCard } from './ToolCallCard.js';
 import { ArtifactMessage } from '../artifacts/ArtifactMessage.js';
-import { Markdown } from '../ui/Markdown.js';
 
 interface Props {
   messages: Message[];
@@ -39,11 +38,11 @@ export function AssistantTurn({ messages, streamingId, running, results, isLastA
     (block.type === 'text' && index < lastProcessIndex && block.text.trim()),
   );
   const answering = blocks.slice(lastProcessIndex + 1).some(({ block }) => block.type === 'text' && block.text.trim());
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(!answering);
   const detailsId = useId();
-  const latestThinking = [...process].reverse().find(({ block }) => block.type === 'thinking' && block.thinking.trim());
-  const summary = latestThinking?.block.type === 'thinking' ? latestThinking.block : null;
-  const summaryLabel = summary?.responsesReasoning || summary?.signature ? '思考摘要' : '思考内容';
+  useEffect(() => {
+    setOpen(!answering);
+  }, [answering]);
 
   const thinkingCount = process.filter(({ block }) => block.type === 'thinking').length;
   const toolCount = process.filter(({ block }) => block.type === 'tool_use').length;
@@ -71,15 +70,9 @@ export function AssistantTurn({ messages, streamingId, running, results, isLastA
             {failedCount > 0 && <span className="shrink-0 text-[11px] text-red-500">{failedCount} 项失败</span>}
             <ChevronDown size={13} className={cn('shrink-0 transition-transform duration-150', open && 'rotate-180')} />
           </button>
-          {!open && summary && (
-            <div className="ml-2.5 max-h-40 overflow-y-auto border-l-2 border-accent-300/70 py-1 pl-3 pr-2 text-xs leading-5 text-zinc-500 dark:border-accent-700/70 dark:text-zinc-400 [&_.prose-chat]:text-xs [&_.prose-chat]:leading-5">
-              <span className="mb-1 block font-medium text-zinc-600 dark:text-zinc-300">{summaryLabel}</span>
-              <Markdown text={summary.thinking} live={!!running && latestThinking?.streaming} />
-            </div>
-          )}
           <div id={detailsId} hidden={!open}>
             {open && process.map(({ block, key, streaming, messageId, index }) => block.type === 'thinking'
-              ? <ThinkingBlock key={key} text={block.thinking} streaming={streaming} summary={!!(block.responsesReasoning || block.signature)} />
+              ? <ThinkingBlock key={key} text={block.thinking} streaming={streaming} />
               : block.type === 'tool_use' ? <ToolCallCard key={key} call={block} result={results[block.id]} />
                 : block.type === 'text' ? <div key={key} className="my-2.5 border-l-2 border-zinc-200 pl-3 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400 [&_.prose-chat]:text-[13px] [&_.prose-chat]:leading-6">
                   <ArtifactMessage text={block.text} live={streaming} messageId={messageId} block={index} />

@@ -47,15 +47,14 @@ afterEach(async () => {
 });
 const mount = async () => { await act(async () => root.render(<MessageList />)); };
 
-it('keeps tools collapsed during streaming and preserves a manual expansion through deltas and persistence', async () => {
+it('collapses on the first answer text and preserves a manual expansion through deltas and persistence', async () => {
   await update({ messages: [user, step, carrier], streaming: message('answer', [thinking]), running: true });
   await mount();
   expect(disclosures()).toHaveLength(1);
-  expect(toggle().getAttribute('aria-expanded')).toBe('false');
-  expect(host.textContent).not.toContain('mcp__exa__web_search_exa');
-  expect(host.textContent).toContain(thinking.thinking);
+  expect(toggle().getAttribute('aria-expanded')).toBe('true');
+  expect(host.textContent).toContain('mcp__exa__web_search_exa');
   await update({ streaming: answer(' \n') });
-  expect(toggle().getAttribute('aria-expanded')).toBe('false');
+  expect(toggle().getAttribute('aria-expanded')).toBe('true');
   await update({ streaming: answer('Here is the answer') });
   expect(toggle().getAttribute('aria-expanded')).toBe('false');
   expect(host.textContent).not.toContain('mcp__exa__web_search_exa');
@@ -75,20 +74,19 @@ it('keeps tools collapsed during streaming and preserves a manual expansion thro
   expect(host.querySelectorAll('button[title="Regenerate"]')).toHaveLength(1);
 });
 
-it('keeps subsequent tools and reclassified reasoning collapsed until explicitly opened', async () => {
+it('opens for subsequent tools or reclassified reasoning, then collapses when the answer resumes', async () => {
   await update({ messages: [user], streaming: { ...answer('I will search for this.'), id: 'step' }, running: true });
   await mount();
   expect(toggle().getAttribute('aria-expanded')).toBe('false');
   await update({ streaming: message('step', [thinking, { type: 'text', text: 'I will search for this.' }, tool]) });
-  expect(toggle().getAttribute('aria-expanded')).toBe('false');
+  expect(toggle().getAttribute('aria-expanded')).toBe('true');
   await act(async () => toggle().click());
-  expect(toggle().getAttribute('aria-expanded')).toBe('true');
   await update({ pendingResults: { search: result } });
-  expect(toggle().getAttribute('aria-expanded')).toBe('true');
+  expect(toggle().getAttribute('aria-expanded')).toBe('false');
   await update({ messages: [user, step, carrier], streaming: message('next', []) });
-  expect(toggle().getAttribute('aria-expanded')).toBe('true');
+  expect(toggle().getAttribute('aria-expanded')).toBe('false');
   await update({ streaming: message('next', [{ type: 'text', text: 'The result is ready.' }]) });
-  expect(toggle().getAttribute('aria-expanded')).toBe('true');
+  expect(toggle().getAttribute('aria-expanded')).toBe('false');
   await update({ streaming: message('next', [thinking]) });
   expect(toggle().getAttribute('aria-expanded')).toBe('true');
 });
@@ -116,7 +114,7 @@ it('restores one collapsed disclosure per historical turn and keeps whole-turn c
   expect(writeText).toHaveBeenCalledWith('Checking sources\nFinal answer');
   await update({ messages: [...useChat.getState().messages, { ...user, id: 'user-2' }], streaming: message('next', [thinking]), running: true });
   expect(disclosures()).toHaveLength(2);
-  expect(disclosures().map(b => b.getAttribute('aria-expanded'))).toEqual(['false', 'false']);
+  expect(disclosures().map(b => b.getAttribute('aria-expanded'))).toEqual(['false', 'true']);
 });
 
 it('moves streamed progress into the process when later reasoning arrives in the same message', async () => {
@@ -126,9 +124,8 @@ it('moves streamed progress into the process when later reasoning arrives in the
   expect(disclosures()).toHaveLength(0);
   expect(host.textContent).toContain(progress.text);
   await update({ streaming: message('answer', [progress, thinking]) });
-  expect(toggle().getAttribute('aria-expanded')).toBe('false');
-  expect(host.textContent).toContain(thinking.thinking);
-  expect(host.textContent).not.toContain(progress.text);
+  expect(toggle().getAttribute('aria-expanded')).toBe('true');
+  expect(processDetails().textContent).toContain(progress.text);
   expect(outsideProcess()).toBe('');
   const complete = message('answer', [progress, thinking, { type: 'text', text: 'Verified answer' }]);
   await update({ streaming: complete });
@@ -144,13 +141,11 @@ it('restores progress in order across calls, including tools without reasoning a
   const search = message('step', [tool], { stopReason: 'tool_use' });
   await update({ messages: [user, progress, search, carrier], streaming: message('next', []), running: true });
   await mount();
-  expect(toggle().getAttribute('aria-expanded')).toBe('false');
+  expect(toggle().getAttribute('aria-expanded')).toBe('true');
   expect(toggle().textContent).toContain('1 次工具调用');
   expect(toggle().textContent).not.toContain('次思考');
-  await act(async () => toggle().click());
   expect(processDetails().textContent).toMatch(/Searching official sources\.[\s\S]*mcp__exa__web_search_exa/);
   expect(outsideProcess()).toBe('');
-  await act(async () => toggle().click());
   await update({ streaming: message('next', [{ type: 'text', text: 'Final without thinking.' }]) });
   expect(toggle().getAttribute('aria-expanded')).toBe('false');
   expect(outsideProcess()).toBe('Final without thinking.');
@@ -160,8 +155,7 @@ it('restores progress in order across calls, including tools without reasoning a
 it.each(['interrupted', 'error', 'max_tokens'] as const)('keeps progress accessible when a turn ends with %s before an answer', async stopReason => {
   await update({ messages: [user, message('stopped', [{ type: 'text', text: 'Let me check this.' }, thinking, tool], { stopReason })] });
   await mount();
-  expect(toggle().getAttribute('aria-expanded')).toBe('false');
-  await act(async () => toggle().click());
+  expect(toggle().getAttribute('aria-expanded')).toBe('true');
   expect(processDetails().textContent).toContain('Let me check this.');
   expect(outsideProcess()).toBe('');
   await act(async () => toggle().click());
@@ -177,7 +171,7 @@ it('keeps failure counts and interrupted output visible when the process is coll
   await act(async () => toggle().click());
   expect(host.textContent).toContain('Failed');
   await update({ messages: [user, message('error', [thinking], { stopReason: 'error' })], pendingResults: {} });
-  expect(toggle().getAttribute('aria-expanded')).toBe('false');
+  expect(toggle().getAttribute('aria-expanded')).toBe('true');
   expect(host.textContent).toContain('Error (partial output)');
 });
 
@@ -197,29 +191,4 @@ it('renders plain replies without a process control and opens artifacts at their
   expect(outsideProcess()).toBe('The artifact is ready.');
   await act(async () => button('Demo').click());
   expect(host.querySelector('iframe')?.srcdoc).toContain('<h1>Artifact content</h1>');
-});
-
-it('shows a returned Responses summary while keeping tools closed after remount', async () => {
-  const summaryText = '**Checking evidence**\n\nThe source supports the answer.';
-  const summary: Block = { type: 'thinking', thinking: summaryText, responsesReasoning: { id: 'rs_1', encrypted_content: 'opaque', summary: [{ type: 'summary_text', text: summaryText }] } };
-  await update({ messages: [user, message('step', [summary, tool], { stopReason: 'tool_use' }), carrier, message('answer', [{ type: 'text', text: 'Final answer' }])] });
-  await mount();
-  expect(toggle().getAttribute('aria-expanded')).toBe('false');
-  expect(host.textContent).toContain('思考摘要');
-  expect(host.textContent).toContain('The source supports the answer.');
-  expect(host.textContent).not.toContain('mcp__exa__web_search_exa');
-  await act(async () => root.unmount());
-  root = createRoot(host);
-  await mount();
-  expect(toggle().getAttribute('aria-expanded')).toBe('false');
-  expect(host.textContent).toContain('The source supports the answer.');
-});
-
-it('labels Anthropic thinking as a summary and compatible Chat reasoning as content', async () => {
-  await update({ messages: [user, message('anthropic', [{ type: 'thinking', thinking: 'Claude summary', signature: 'opaque' }, { type: 'text', text: 'Answer' }])] });
-  await mount();
-  expect(host.textContent).toContain('思考摘要');
-  await update({ messages: [user, message('chat', [{ type: 'thinking', thinking: 'Gateway reasoning' }, { type: 'text', text: 'Answer' }])] });
-  expect(host.textContent).toContain('思考内容');
-  expect(host.textContent).not.toContain('思考摘要');
 });
