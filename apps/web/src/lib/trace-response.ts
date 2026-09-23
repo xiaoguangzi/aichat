@@ -6,6 +6,8 @@ const string = (value: unknown) => typeof value === 'string' ? value : '';
 export function traceResponse(raw: string | null): { value: unknown; partial: boolean } | null {
   if (!raw?.trim()) return null;
   try { return { value: JSON.parse(raw), partial: false }; } catch { /* SSE follows. */ }
+  const output = new Map<number, JsonObject>();
+  let response: JsonObject | undefined;
   const blocks = new Map<number, JsonObject>();
   const inputs = new Map<number, string>();
   const choices = new Map<number, JsonObject>();
@@ -19,6 +21,28 @@ export function traceResponse(raw: string | null): { value: unknown; partial: bo
     if (data.trim() === '[DONE]') { ended = true; continue; }
     let event: JsonObject;
     try { event = object(JSON.parse(data)); } catch { partial = true; continue; }
+    if (typeof event.type === 'string' && event.type.startsWith('response.')) {
+      if (event.response) response = object(event.response);
+      if (['response.completed', 'response.incomplete', 'response.failed'].includes(event.type)) ended = true;
+      const index = typeof event.output_index === 'number' ? event.output_index : 0;
+      if (event.type === 'response.output_item.added' || event.type === 'response.output_item.done') output.set(index, { ...object(event.item) });
+      const item = output.get(index);
+      if (item && event.type === 'response.function_call_arguments.delta') item.arguments = string(item.arguments) + string(event.delta);
+      if (item && (event.type === 'response.output_text.delta' || event.type === 'response.refusal.delta')) {
+        const content = (item.content ??= []) as JsonObject[];
+        const i = typeof event.content_index === 'number' ? event.content_index : 0;
+        const refusal = event.type === 'response.refusal.delta';
+        const part = content[i] ??= { type: refusal ? 'refusal' : 'output_text' };
+        const key = refusal ? 'refusal' : 'text';
+        part[key] = string(part[key]) + string(event.delta);
+      }
+      if (item && event.type === 'response.reasoning_summary_text.delta') {
+        const summary = (item.summary ??= []) as JsonObject[];
+        const i = typeof event.summary_index === 'number' ? event.summary_index : 0;
+        const part = summary[i] ??= { type: 'summary_text' };
+        part.text = string(part.text) + string(event.delta);
+      }
+    }
     if (event.type === 'message_stop') ended = true;
     if (event.type === 'content_block_start' && typeof event.index === 'number') {
       blocks.set(event.index, { ...object(event.content_block) });
@@ -63,7 +87,8 @@ export function traceResponse(raw: string | null): { value: unknown; partial: bo
     try { block.input = JSON.parse(input); } catch { block.input = input; partial = true; }
   }
   for (const [index, tools] of calls) choices.get(index)!.tool_calls = [...tools.values()];
-  const value: JsonObject = {};
+  const value: JsonObject = response ? { ...response } : {};
+  if (output.size && (!ended || !Array.isArray(value.output) || !value.output.length)) value.output = [...output.entries()].sort(([a], [b]) => a - b).map(([, item]) => item);
   if (blocks.size) value.content = [...blocks.entries()].sort(([a], [b]) => a - b).map(([, block]) => block);
   if (choices.size) value.choices = [...choices.values()];
   if (events.length) value.errors = events;

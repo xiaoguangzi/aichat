@@ -30,6 +30,7 @@ export const reasoningLevelSchema = z.enum(['off', 'minimal', 'low', 'medium', '
 export const reasoningMapSchema = z.partialRecord(reasoningLevelSchema, z.string().nullable());
 
 export const providerCompatSchema = z.object({
+  apiFormat: z.enum(['chat-completions', 'responses']).optional(),
   promptCaching: z.enum(['auto', 'on', 'off']).optional(),
   streamOptions: z.boolean().optional(),
   maxCompletionTokens: z.boolean().optional(),

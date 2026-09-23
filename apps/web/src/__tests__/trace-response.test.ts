@@ -41,3 +41,15 @@ it('keeps complete deltas in a truncated stream and marks the result partial', (
   expect(traceResponse('unrecognized response')).toBeNull();
   expect(traceResponse('{"error":{"message":"failed"}}')).toEqual({ partial: false, value: { error: { message: 'failed' } } });
 });
+
+it('projects Responses final output and retains partial streaming reasoning', () => {
+  const frames = [
+    { type: 'response.created', response: { id: 'resp_1', output: [] } },
+    { type: 'response.output_item.added', output_index: 0, item: { type: 'reasoning', id: 'rs_1', summary: [] } },
+    { type: 'response.reasoning_summary_text.delta', output_index: 0, summary_index: 0, delta: 'Think' },
+  ];
+  const raw = frames.map(f => `data: ${JSON.stringify(f)}\n\n`).join('');
+  expect(traceResponse(raw)).toMatchObject({ partial: true, value: { output: [{ type: 'reasoning', summary: [{ type: 'summary_text', text: 'Think' }] }] } });
+  const output = [{ type: 'message', content: [{ type: 'output_text', text: 'Done' }] }];
+  expect(traceResponse(raw + `data: ${JSON.stringify({ type: 'response.completed', response: { id: 'resp_1', output } })}\n\n`)).toEqual({ partial: false, value: { id: 'resp_1', output } });
+});

@@ -11,7 +11,7 @@ import { ModelForm } from '../components/providers/ModelForm.js';
 import { AddModels } from '../components/providers/AddModels.js';
 import { cn } from '../lib/utils.js';
 
-const protocol = (p: Provider) => p.type === 'openai' ? 'OpenAI 兼容' : 'Anthropic 兼容';
+const protocol = (p: Provider) => p.type === 'openai' ? (p.compat.apiFormat === 'responses' ? 'OpenAI Responses' : 'OpenAI Chat Completions') : 'Anthropic 兼容';
 const badge = 'rounded-md bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400';
 
 function ProviderDetail({ p, reload, onDirtyChange, onBusyChange }: { p: Provider; reload: () => Promise<void>; onDirtyChange: (v: boolean) => void; onBusyChange: (v: boolean) => void }) {

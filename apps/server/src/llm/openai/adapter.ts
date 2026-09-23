@@ -158,7 +158,7 @@ export class OpenAIAdapter implements LLMAdapter {
   }
 }
 
-function wrapError(e: unknown): unknown {
+export function wrapError(e: unknown): unknown {
   if (e instanceof OpenAI.AuthenticationError) return new AppError('auth', `OpenAI auth failed: ${e.message}`, 401);
   if (e instanceof OpenAI.RateLimitError) return new AppError('rate_limit', `Rate limited: ${e.message}`, 429);
   if (e instanceof OpenAI.BadRequestError) return new AppError('bad_request', `OpenAI 400: ${e.message}`, 400);

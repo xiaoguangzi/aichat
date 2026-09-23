@@ -1,7 +1,13 @@
 // ---------- Canonical message format (provider-agnostic) ----------
 
 export type TextBlock = { type: 'text'; text: string };
-export type ThinkingBlock = { type: 'thinking'; thinking: string; signature?: string };
+export type ThinkingBlock = {
+  type: 'thinking';
+  thinking: string;
+  signature?: string;
+  /** Opaque Responses state, separate from Anthropic signatures. */
+  responsesReasoning?: { id: string; encrypted_content: string; summary: Array<{ type: 'summary_text'; text: string }> };
+};
 /** Image stored either inline (base64) or as a reference to an uploaded attachment. */
 export type ImageBlock = {
   type: 'image';
@@ -73,6 +79,7 @@ export interface Usage {
 // ---------- Unified stream events (adapter -> agent loop) ----------
 
 export type StreamEvent =
+  | { type: 'responses_reasoning'; item: NonNullable<ThinkingBlock['responsesReasoning']> }
   | { type: 'text_delta'; text: string }
   | { type: 'thinking_delta'; text: string; signature?: string }
   | { type: 'tool_call_start'; id: string; name: string }
@@ -125,6 +132,8 @@ export type ChatSSEEvent =
 export type ProviderType = 'openai' | 'anthropic';
 
 export interface ProviderCompat {
+  /** OpenAI wire format; existing connections default to Chat Completions. */
+  apiFormat?: 'chat-completions' | 'responses';
   /** Anthropic explicit 5-minute breakpoints. Auto enables only documented endpoints. */
   promptCaching?: 'auto' | 'on' | 'off';
   /** send stream_options: { include_usage: true } (OpenAI only) */

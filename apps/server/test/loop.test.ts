@@ -11,6 +11,7 @@ process.env.SKILLS_DIR = path.join(tmp, 'skills');
 // Fake adapter: first call requests a tool, second call answers.
 const calls: unknown[] = [];
 let largeResult = false;
+let truncatedResponses = false;
 vi.mock('../src/llm/registry.js', () => ({
   getAdapter: () => ({
     type: 'openai',
@@ -20,6 +21,7 @@ vi.mock('../src/llm/registry.js', () => ({
       if (calls.length === 1) {
         yield { type: 'text_delta', text: 'let me check' };
         yield { type: 'tool_call_start', id: 't1', name: 'mcp__demo__echo' };
+        if (truncatedResponses) { yield { type: 'done', stopReason: 'max_tokens' }; return; }
         yield { type: 'tool_call_end', id: 't1', input: { msg: 'hi' } };
         yield { type: 'done', stopReason: 'tool_use' };
       } else if (largeResult && calls.length === 2) {
@@ -55,6 +57,7 @@ const { runAgent } = await import('../src/agent/loop.js');
 beforeEach(() => {
   calls.length = 0;
   largeResult = false;
+  truncatedResponses = false;
   ensureDirs();
   initDb(path.join(tmp, `t-${Date.now()}.db`));
 });
@@ -113,4 +116,17 @@ describe('runAgent', () => {
     const second = calls[1] as { messages: Array<{ role: string }> };
     expect(second.messages.map((x) => x.role)).toEqual(['user', 'assistant', 'user']);
   });
+});
+
+it('does not execute an unfinished Responses tool call after the output limit', async () => {
+  truncatedResponses = true;
+  const p = providersRepo.create({ name: 'responses', type: 'openai', baseUrl: 'http://x', compat: { apiFormat: 'responses' } });
+  const m = modelsRepo.upsert(p.id, { modelId: 'test' });
+  const conv = conversationsRepo.create({ providerId: p.id, modelId: m.id });
+  messagesRepo.create({ conversationId: conv.id, role: 'user', content: [{ type: 'text', text: 'test' }] });
+  const events: ChatSSEEvent[] = [];
+  await runAgent({ conversation: conv, signal: new AbortController().signal, emit: e => void events.push(e) });
+  expect(calls).toHaveLength(1);
+  expect(events.some(e => e.event === 'tool_result')).toBe(false);
+  expect(messagesRepo.list(conv.id).at(-1)?.stopReason).toBe('max_tokens');
 });

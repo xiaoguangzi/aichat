@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
-# End-to-end smoke test against the mock LLM server for both protocols.
+# End-to-end smoke test against the mock LLM server for all three API formats.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$(cd ../.. && pwd)"
 TMP="$(mktemp -d)"
+mkdir -p "$TMP/skills/example-skill"
+cat > "$TMP/skills/example-skill/SKILL.md" <<'SKILL'
+---
+name: example-skill
+description: Smoke test fixture
+---
+Return a brief test response.
+SKILL
 MOCK_PORT=3999; PORT=3111
 npx tsx test/mock-llm-server.ts $MOCK_PORT >"$TMP/mock.log" 2>&1 & MOCK=$!
-DATA_DIR="$TMP/data" SKILLS_DIR="$ROOT/skills" PORT=$PORT WEB_DIST="$ROOT/apps/web/dist" node --no-warnings=ExperimentalWarning dist/index.js >"$TMP/server.log" 2>&1 & SRV=$!
+DATA_DIR="$TMP/data" SKILLS_DIR="$TMP/skills" PORT=$PORT WEB_DIST="$ROOT/apps/web/dist" node --no-warnings=ExperimentalWarning dist/index.js >"$TMP/server.log" 2>&1 & SRV=$!
 trap 'kill $MOCK $SRV 2>/dev/null; echo "logs in $TMP"' EXIT
 for i in $(seq 1 40); do curl -sf 127.0.0.1:$PORT/api/health >/dev/null && break; sleep 0.25; done
 B="http://127.0.0.1:$PORT/api"
@@ -22,12 +30,17 @@ MA=$(curl -sf $J -d '{"modelId":"mock-model","thinking":"adaptive"}' $B/provider
 echo "test (openai): $(curl -sf $J -d '{}' $B/providers/$OAI/test)"
 echo "test (anthropic): $(curl -sf $J -d '{}' $B/providers/$ANT/test)"
 
-for PAIR in "openai:$MO" "anthropic:$MA"; do
+RSP=$(curl -sf $J -d '{"name":"mock-responses","type":"openai","baseUrl":"http://127.0.0.1:'$MOCK_PORT'/v1","compat":{"apiFormat":"responses"}}' $B/providers | node -pe 'JSON.parse(require("fs").readFileSync(0)).id')
+MR=$(curl -sf $J -d '{"modelId":"mock-model","caps":{"thinking":true,"tools":true}}' $B/providers/$RSP/models | node -pe 'JSON.parse(require("fs").readFileSync(0)).id')
+for PAIR in "openai:$MO" "anthropic:$MA" "responses:$MR"; do
   NAME=${PAIR%%:*}; MID=${PAIR#*:}
   echo "== chat via $NAME (skill tool loop)"
   C=$(curl -sf $J -d '{"modelId":"'$MID'"}' $B/conversations | node -pe 'JSON.parse(require("fs").readFileSync(0)).id')
   curl -sN $J -d '{"text":"hello world"}' $B/conversations/$C/messages | grep -E '^event:' | sort | uniq -c | sort -rn | tr '\n' ' '; echo
   echo "messages: $(curl -sf $B/conversations/$C | node -pe 'const c=JSON.parse(require("fs").readFileSync(0)); c.title+" | "+c.messages.map(m=>m.role+":"+m.content.map(b=>b.type).join("+")).join(", ")')"
+  if [ "$NAME" = responses ]; then
+    curl -sf "$B/conversations/$C" | node -e 'const c=JSON.parse(require("fs").readFileSync(0)); if(!c.messages.some(m=>m.content.some(b=>b.type==="tool_result")) || !c.messages.some(m=>m.content.some(b=>b.type==="text" && b.text.includes("Responses tool round trip complete")))) process.exit(1);'
+  fi
   # Request log: every upstream attempt of the loop, with the raw SSE reply kept for inspection.
   TID=$(curl -sf "$B/conversations/$C/traces" | node -pe 'const t=JSON.parse(require("fs").readFileSync(0)); const chat=t.filter(r=>r.purpose==="chat"); if(chat.length<1||chat.some(r=>r.status!=="complete"||!r.bodyAvailable||!r.rawUsage)){console.error("FAIL: request log incomplete",JSON.stringify(t.map(r=>[r.purpose,r.status,r.bodyAvailable])));process.exit(1)} console.error("traces: "+t.map(r=>r.purpose+":"+r.status+":"+r.httpStatus+":"+r.responseBytes+"B").join(", ")); chat[0].id')
   curl -sf "$B/conversations/$C/traces/$TID" | node -pe 'const d=JSON.parse(require("fs").readFileSync(0)); if(!d.requestBody||!d.requestBody.model||typeof d.responseBody!=="string"||!d.responseBody.includes("data:")||!d.responseHeaders["content-type"]){console.error("FAIL: trace detail lacks request JSON or raw SSE");process.exit(1)} "trace detail OK"'

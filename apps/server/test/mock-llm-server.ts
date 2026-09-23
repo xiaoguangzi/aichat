@@ -1,5 +1,5 @@
 /**
- * Minimal mock of both protocols for e2e smoke tests.
+ * Minimal mock of all three API formats for e2e smoke tests.
  *   POST /v1/chat/completions  (OpenAI, streaming)  -> text, or a tool call if tools are present and no tool result yet
  *   POST /v1/messages          (Anthropic, streaming) -> same behaviour
  *   GET  /v1/models
@@ -36,13 +36,43 @@ createServer((req, res) => {
     const reply = `Echo: ${userText.slice(0, 60)}`;
     const toolName = wantTool ? String((j.tools![0] as { name?: string; function?: { name: string } }).name ?? (j.tools![0] as { function: { name: string } }).function.name) : '';
 
+    if (url.endsWith('/responses')) {
+      const r = JSON.parse(body) as { input: Array<{ type?: string; role?: string; content?: unknown }>; tools?: Array<{ name: string }> };
+      const hasResult = r.input.some(i => i.type === 'function_call_output');
+      const wantsTool = !!r.tools?.length && !hasResult;
+      const reasoning = { type: 'reasoning', id: 'rs_mock', summary: [{ type: 'summary_text', text: 'Responses thinking' }], encrypted_content: 'mock-encrypted-reasoning' };
+      if (hasResult && !r.input.some(i => i.type === 'reasoning')) {
+        res.writeHead(400); res.end('Missing reasoning replay'); return;
+      }
+      const call = { type: 'function_call', id: 'fc_mock', call_id: 'call_responses', name: r.tools?.find(t => t.name === 'skill__load')?.name ?? r.tools?.[0]?.name, arguments: '{"name":"example-skill"}' };
+      const text = hasResult ? 'Responses tool round trip complete.' : 'Responses reply received.';
+      const message = { type: 'message', id: 'msg_mock', role: 'assistant', content: [{ type: 'output_text', text, annotations: [] }], status: 'completed' };
+      const events: Array<{ data: unknown }> = [
+        { data: { type: 'response.created', response: { id: 'resp_mock', output: [] } } },
+        { data: { type: 'response.output_item.added', output_index: 0, item: { ...reasoning, summary: [], encrypted_content: null } } },
+        { data: { type: 'response.reasoning_summary_text.delta', output_index: 0, summary_index: 0, delta: 'Responses thinking' } },
+        { data: { type: 'response.output_item.done', output_index: 0, item: reasoning } },
+      ];
+      if (wantsTool) events.push(
+        { data: { type: 'response.output_item.added', output_index: 1, item: { ...call, arguments: '' } } },
+        { data: { type: 'response.function_call_arguments.delta', output_index: 1, delta: call.arguments } },
+        { data: { type: 'response.output_item.done', output_index: 1, item: call } },
+      );
+      else events.push(
+        { data: { type: 'response.output_item.added', output_index: 1, item: { ...message, content: [] } } },
+        { data: { type: 'response.output_text.delta', output_index: 1, content_index: 0, delta: text } },
+        { data: { type: 'response.output_item.done', output_index: 1, item: message } },
+      );
+      events.push({ data: { type: 'response.completed', response: { id: 'resp_mock', status: 'completed', output: [reasoning, wantsTool ? call : message], usage: { input_tokens: 30, output_tokens: 8, input_tokens_details: { cached_tokens: 10 } } } } });
+      sse(res, events); return;
+    }
     if (url.endsWith('/chat/completions')) {
       const id = 'chatcmpl-1';
       const chunk = (delta: unknown, finish: string | null = null) => ({ data: { id, object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason: finish }] } });
       const ev = wantTool
         ? [chunk({ role: 'assistant', content: 'Let me call a tool.' }), chunk({ tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: toolName, arguments: '{"na' } }] }), chunk({ tool_calls: [{ index: 0, function: { arguments: 'me":"example-skill"}' } }] }), chunk({}, 'tool_calls')]
         : [chunk({ role: 'assistant', reasoning_content: 'thinking...' }), ...reply.split(' ').map((w) => chunk({ content: w + ' ' })), chunk({}, 'stop'), { data: { id, choices: [], usage: { prompt_tokens: 12, completion_tokens: 7 } } }];
-      sse(res, [...ev, { data: '[DONE]' }]);
+      sse(res, [...ev, ...(wantTool ? [{ data: { id, choices: [], usage: { prompt_tokens: 12, completion_tokens: 7 } } }] : []), { data: '[DONE]' }]);
       return;
     }
     if (url.endsWith('/messages')) {

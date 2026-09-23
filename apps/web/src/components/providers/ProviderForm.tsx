@@ -10,6 +10,7 @@ import { cn } from '../../lib/utils.js';
 const presets: { id: string; label: string; description: string; config: ProviderInput }[] = [
   { id: 'custom', label: '自定义', description: '中转服务 / 私有部署', config: { name: '', type: 'openai', baseUrl: '', compat: {} } },
   { id: 'openai', label: 'OpenAI', description: 'Chat Completions', config: { name: 'OpenAI', type: 'openai', baseUrl: 'https://api.openai.com/v1', compat: {} } },
+  { id: 'responses', label: 'OpenAI Responses', description: 'Responses API', config: { name: 'OpenAI Responses', type: 'openai', baseUrl: 'https://api.openai.com/v1', compat: { apiFormat: 'responses' } } },
   { id: 'anthropic', label: 'Anthropic', description: 'Messages API', config: { name: 'Anthropic', type: 'anthropic', baseUrl: 'https://api.anthropic.com', compat: {} } },
   { id: 'deepseek', label: 'DeepSeek', description: 'OpenAI 兼容', config: { name: 'DeepSeek', type: 'openai', baseUrl: 'https://api.deepseek.com/v1', compat: { thinkingFormat: 'deepseek' } } },
   { id: 'openrouter', label: 'OpenRouter', description: '多模型聚合', config: { name: 'OpenRouter', type: 'openai', baseUrl: 'https://openrouter.ai/api/v1', compat: { thinkingFormat: 'openrouter' } } },
@@ -40,7 +41,7 @@ export function ProviderForm({ initial, onDone, onCancel, onDirtyChange, onBusyC
       let url: URL;
       try { url = new URL(baseUrl); } catch { throw new Error('请输入完整的 API 地址，以 https:// 或 http:// 开头。'); }
       if (!['http:', 'https:'].includes(url.protocol) || url.search || url.hash) throw new Error('API 地址须使用 HTTP / HTTPS，且不包含查询参数或 #。');
-      if (/\/(chat\/completions|messages)$/.test(url.pathname)) throw new Error('请填写基础地址，去掉末尾的 /chat/completions 或 /v1/messages。');
+      if (/\/(chat\/completions|messages|responses)$/.test(url.pathname)) throw new Error('请填写基础地址，去掉末尾的 /chat/completions、/responses 或 /v1/messages。');
       const result = providerInputSchema.safeParse({ ...f, name: f.name.trim(), baseUrl, apiKey: clearKey ? '' : f.apiKey?.trim() || undefined, extraHeaders });
       if (!result.success) throw new Error('请检查名称（1–100 字）及请求头（JSON 对象，值为字符串）。');
       const provider = initial ? await api.providers.update(initial.id, result.data) : await api.providers.create(result.data);
@@ -65,7 +66,10 @@ export function ProviderForm({ initial, onDone, onCancel, onDirtyChange, onBusyC
           <option value="openai">OpenAI 兼容</option><option value="anthropic">Anthropic 兼容</option>
         </Select></Field>
       </div>
-      <Field label="API 地址" hint={f.type === 'openai' ? '填写基础地址，通常以 /v1 结尾；不要包含 /chat/completions。' : '填写基础地址，例如 https://api.anthropic.com；不要包含 /v1/messages。'}>
+      {f.type === 'openai' && <Field label="API 格式"><Select aria-label="API 格式" value={f.compat?.apiFormat ?? 'chat-completions'} onChange={(e) => setF({ ...f, compat: { ...f.compat, apiFormat: e.target.value as 'chat-completions' | 'responses' } })}>
+        <option value="chat-completions">Chat Completions</option><option value="responses">Responses API</option>
+      </Select></Field>}
+      <Field label="API 地址" hint={f.type === 'openai' ? '填写基础地址，通常以 /v1 结尾；不要包含 /chat/completions 或 /responses。' : '填写基础地址，例如 https://api.anthropic.com；不要包含 /v1/messages。'}>
         <Input aria-label="API 地址" required type="url" value={f.baseUrl} onChange={(e) => setF({ ...f, baseUrl: e.target.value })} placeholder={f.type === 'openai' ? 'https://api.example.com/v1' : 'https://api.example.com'} />
       </Field>
       <Field label="API 密钥" hint={initial?.hasApiKey ? `已保存 ${initial.apiKeyMasked}，留空保留原密钥。` : '由供应商提供。本地服务无需密钥时可留空。'}>
@@ -99,10 +103,12 @@ export function ProviderForm({ initial, onDone, onCancel, onDirtyChange, onBusyC
       {f.type === 'openai' && (
         <div className="space-y-2.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 p-3 text-sm">
           <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">协议兼容</div>
+          {f.compat?.apiFormat !== 'responses' && <>
           <Toggle checked={f.compat?.streamOptions !== false} onChange={(v) => setF({ ...f, compat: { ...f.compat, streamOptions: v } })} label="获取流式 token 用量（stream_options）" />
           <Toggle checked={!!f.compat?.maxCompletionTokens} onChange={(v) => setF({ ...f, compat: { ...f.compat, maxCompletionTokens: v } })} label="使用 max_completion_tokens 参数" />
+          </>}
           <Toggle checked={f.compat?.sendTemperature !== false} onChange={(v) => setF({ ...f, compat: { ...f.compat, sendTemperature: v } })} label="发送温度参数" />
-          <Field label="推理参数格式" hint="仅在供应商要求不同的参数格式时修改。">
+          {f.compat?.apiFormat !== 'responses' && <Field label="推理参数格式" hint="仅在供应商要求不同的参数格式时修改。">
             <Select value={f.compat?.thinkingFormat ?? (f.compat?.openaiThinkingObject ? 'zai' : 'openai')} onChange={(e) => setF({ ...f, compat: { ...f.compat, thinkingFormat: e.target.value as 'openai' | 'openrouter' | 'zai' | 'qwen' | 'deepseek' } })}>
               <option value="openai">openai (reasoning_effort)</option>
               <option value="openrouter">openrouter (reasoning object)</option>
@@ -110,7 +116,7 @@ export function ProviderForm({ initial, onDone, onCancel, onDirtyChange, onBusyC
               <option value="qwen">qwen (enable_thinking)</option>
               <option value="deepseek">deepseek (thinking object, no off)</option>
             </Select>
-          </Field>
+          </Field>}
           <Toggle checked={f.compat?.inlineThinkTags !== false} onChange={(v) => setF({ ...f, compat: { ...f.compat, inlineThinkTags: v } })} label="将回答中的 <think> 标签内容显示为思考过程" />
         </div>
       )}

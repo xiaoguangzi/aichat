@@ -95,6 +95,7 @@ export async function runAgent(opts: RunOptions): Promise<void> {
   const conv = opts.conversation;
   const { model, provider } = resolveModel(conv);
   const adapter = getAdapter(provider);
+  const responses = provider.type === 'openai' && provider.compat.apiFormat === 'responses';
   const settings = conv.settings;
 
   let tools = model.caps.tools
@@ -113,8 +114,8 @@ export async function runAgent(opts: RunOptions): Promise<void> {
   const history: LLMMessage[] = [];
   // Replay stable prefixes; batch-compact old turns only when overhead crosses the budget.
   // Shape before hydrating so cleared media is never read from disk.
-  for (const m of shapeOldTurns(storedMessages, provider.type, isOfficialDeepSeek(provider) && tools.length > 0)) {
-    history.push({ role: m.role, content: await hydrateBlocks(m.content, provider.type) });
+  for (const m of shapeOldTurns(storedMessages, provider.type, (isOfficialDeepSeek(provider) && tools.length > 0) || responses)) {
+    history.push({ role: m.role, content: await hydrateBlocks(m.content, provider.type, responses && model.caps.pdf) });
   }
 
   try {
@@ -146,6 +147,12 @@ export async function runAgent(opts: RunOptions): Promise<void> {
               bb.thinking(ev.text, ev.signature);
               if (ev.text) await emit({ event: 'thinking_delta', data: { text: ev.text } });
               break;
+            case 'responses_reasoning': {
+              const last = bb.blocks.at(-1);
+              if (last?.type === 'thinking' && !last.responsesReasoning) last.responsesReasoning = ev.item;
+              else bb.blocks.push({ type: 'thinking', thinking: '', responsesReasoning: ev.item });
+              break;
+            }
             case 'thinking_reclassify':
               bb.reclassifyTextAsThinking();
               await emit({ event: 'thinking_reclassify', data: {} });
@@ -188,7 +195,7 @@ export async function runAgent(opts: RunOptions): Promise<void> {
         bb.text(`\n\n> Request declined by the model's safety system${refusal.category ? ` (${refusal.category})` : ''}${refusal.explanation ? `: ${refusal.explanation}` : '.'}`);
       }
       const toolUses = bb.toolUses();
-      if (toolUses.length && stopReason !== 'interrupted') stopReason = 'tool_use';
+      if (toolUses.length && stopReason !== 'interrupted' && !responses) stopReason = 'tool_use';
       const saved = messagesRepo.create({ conversationId: conv.id, role: 'assistant', content: bb.blocks, usage, timing: timer.snapshot(), stopReason, id: assistantId });
       lastAssistantId = assistantId;
       conversationsRepo.touch(conv.id);
@@ -223,7 +230,7 @@ export async function runAgent(opts: RunOptions): Promise<void> {
       const resultMsg = messagesRepo.create({ conversationId: conv.id, role: 'user', content: results });
       await emit({ event: 'message_start', data: { messageId: resultMsg.id, role: 'user' } });
       await emit({ event: 'message_end', data: { messageId: resultMsg.id, stopReason: 'end_turn', message: resultMsg } });
-      history.push({ role: 'user', content: await hydrateBlocks(results, provider.type) });
+      history.push({ role: 'user', content: await hydrateBlocks(results, provider.type, responses && model.caps.pdf) });
       if (signal.aborted) return;
     }
     await emit({ event: 'error', data: { code: 'max_iterations', message: `Stopped after ${config.maxAgentIterations} tool iterations.` } });

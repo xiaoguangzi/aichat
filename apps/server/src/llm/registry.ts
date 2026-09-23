@@ -1,6 +1,7 @@
 import type { LLMAdapter } from './types.js';
 import type { ProviderSecret } from '../db/repos/providers.js';
 import { AnthropicAdapter } from './anthropic/adapter.js';
+import { ResponsesAdapter } from './responses/adapter.js';
 import { OpenAIAdapter } from './openai/adapter.js';
 import { splitInlineThinking } from './thinkTags.js';
 
@@ -14,7 +15,7 @@ export function getAdapter(p: ProviderSecret): LLMAdapter {
   const key = cacheKey(p);
   const hit = cache.get(p.id);
   if (hit && hit.key === key) return hit.adapter;
-  const base = p.type === 'anthropic' ? new AnthropicAdapter(p) : new OpenAIAdapter(p);
+  const base = p.type === 'anthropic' ? new AnthropicAdapter(p) : p.compat.apiFormat === 'responses' ? new ResponsesAdapter(p) : new OpenAIAdapter(p);
   // Reasoning leaked into the answer text is a gateway quirk, not a protocol one, so the
   // filter wraps either adapter. compat.inlineThinkTags: false opts a provider out.
   const adapter: LLMAdapter =

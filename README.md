@@ -138,3 +138,9 @@ packages/shared/  共享类型与请求校验
 skills/           本地技能，首次运行时自动创建
 data/             本地运行数据，首次运行时自动创建
 ```
+
+### OpenAI Responses API
+
+在「设置 → 模型服务」选择 **OpenAI Responses** 模板，或在 OpenAI 供应商的「API 格式」中选择 **Responses API**。基础地址通常以 `/v1` 结尾，不包含 `/responses`；已有连接默认继续使用 Chat Completions。
+
+支持流式文本、思考摘要、函数工具调用与结果回传、图片、PDF（模型需启用 PDF 能力）、用量与缓存读取统计，以及调用链查看。思考档位发送为 `reasoning.effort`，输出预算使用 `max_output_tokens`；Chat Completions 专属兼容参数不用于 Responses。请求采用 `store: false`，通过本地历史回传加密 reasoning；不依赖服务端保存的 response ID。兼容网关需要自身实现 Responses API。

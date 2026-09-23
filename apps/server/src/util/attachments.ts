@@ -58,10 +58,10 @@ export function attachmentToBlocks(att: { id: string; filename: string; mime: st
 
 /**
  * Replace attachment references with inline data before sending to a provider.
- * PDFs become native documents for Anthropic; extracted text for OpenAI-compatible endpoints.
+ * PDFs become native documents for Anthropic or enabled Responses PDF input; otherwise extracted text.
  * Office files (.docx/.xlsx/.pptx) are always extracted to text — no provider takes them natively.
  */
-export async function hydrateBlocks(blocks: Block[], providerType: ProviderType): Promise<Block[]> {
+export async function hydrateBlocks(blocks: Block[], providerType: ProviderType, nativePdf = false): Promise<Block[]> {
   const out: Block[] = [];
   for (const b of blocks) {
     if (b.type === 'image' && b.attachmentId && !b.data) {
@@ -80,7 +80,7 @@ export async function hydrateBlocks(blocks: Block[], providerType: ProviderType)
       const buf = await fs.readFile(att.path);
       const office = officeKind(att.filename, att.mime);
       if (att.mime === 'application/pdf') {
-        if (providerType === 'anthropic') {
+        if (providerType === 'anthropic' || nativePdf) {
           out.push({ type: 'document', mime: 'application/pdf', name: att.filename, data: buf.toString('base64') });
         } else {
           let text: string;
@@ -105,7 +105,7 @@ export async function hydrateBlocks(blocks: Block[], providerType: ProviderType)
         out.push({ type: 'text', text: `[attachment ${att.filename} (${att.mime}, ${att.size} bytes) — binary content not included]` });
       }
     } else if (b.type === 'tool_result') {
-      out.push({ ...b, content: await hydrateBlocks(b.content, providerType) });
+      out.push({ ...b, content: await hydrateBlocks(b.content, providerType, nativePdf) });
     } else {
       out.push(b);
     }
