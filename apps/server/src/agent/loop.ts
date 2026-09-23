@@ -57,6 +57,16 @@ export class BlockBuilder {
       else this.blocks.push({ type: 'thinking', thinking: t, signature });
     }
   }
+  responsesReasoning(item: NonNullable<Extract<Block, { type: 'thinking' }>['responsesReasoning']>) {
+    const summary = item.summary.map(part => part.text).filter(Boolean).join('\n\n');
+    const last = this.blocks.at(-1);
+    if (last?.type === 'thinking' && !last.responsesReasoning) {
+      if (!last.thinking.trim()) last.thinking = summary;
+      last.responsesReasoning = item;
+    } else {
+      this.blocks.push({ type: 'thinking', thinking: summary, responsesReasoning: item });
+    }
+  }
   /** the text collected so far was reasoning the model leaked into content */
   reclassifyTextAsThinking() {
     const next: Block[] = [];
@@ -148,9 +158,7 @@ export async function runAgent(opts: RunOptions): Promise<void> {
               if (ev.text) await emit({ event: 'thinking_delta', data: { text: ev.text } });
               break;
             case 'responses_reasoning': {
-              const last = bb.blocks.at(-1);
-              if (last?.type === 'thinking' && !last.responsesReasoning) last.responsesReasoning = ev.item;
-              else bb.blocks.push({ type: 'thinking', thinking: '', responsesReasoning: ev.item });
+              bb.responsesReasoning(ev.item);
               break;
             }
             case 'thinking_reclassify':

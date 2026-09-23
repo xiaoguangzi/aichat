@@ -52,7 +52,7 @@ const { ensureDirs } = await import('../src/config.js');
 const { providersRepo, modelsRepo } = await import('../src/db/repos/providers.js');
 const { conversationsRepo } = await import('../src/db/repos/conversations.js');
 const { messagesRepo } = await import('../src/db/repos/messages.js');
-const { runAgent } = await import('../src/agent/loop.js');
+const { BlockBuilder, runAgent } = await import('../src/agent/loop.js');
 
 beforeEach(() => {
   calls.length = 0;
@@ -62,6 +62,15 @@ beforeEach(() => {
   initDb(path.join(tmp, `t-${Date.now()}.db`));
 });
 afterEach(() => closeDb());
+
+it('persists a Responses summary from the final reasoning item when no summary delta arrives', () => {
+  const blocks = new BlockBuilder();
+  blocks.responsesReasoning({ id: 'rs_1', encrypted_content: 'opaque', summary: [{ type: 'summary_text', text: 'First point' }, { type: 'summary_text', text: 'Second point' }] });
+  expect(blocks.blocks).toEqual([{ type: 'thinking', thinking: 'First point\n\nSecond point', responsesReasoning: { id: 'rs_1', encrypted_content: 'opaque', summary: [{ type: 'summary_text', text: 'First point' }, { type: 'summary_text', text: 'Second point' }] } }]);
+  blocks.thinking('Streamed summary');
+  blocks.responsesReasoning({ id: 'rs_2', encrypted_content: 'opaque', summary: [{ type: 'summary_text', text: 'Final summary' }] });
+  expect(blocks.blocks.at(-1)).toMatchObject({ type: 'thinking', thinking: 'Final summary' });
+});
 
 describe('runAgent', () => {
   it.each(['openai', 'anthropic'] as const)('handles a large result then a saved-original read with %s', async type => {
