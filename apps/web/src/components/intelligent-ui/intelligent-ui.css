@@ -74,11 +74,13 @@
 .iui-chart-data { margin-top: 8px; }
 .iui-chart-data summary { font-size: 11px; color: var(--chat-text-muted); cursor: pointer; }
 .iui-chart-data .iui-table-scroll { margin-top: 8px; }
-.iui-diagram-nodes { display: flex; flex-wrap: wrap; gap: 6px; }
-.iui-diagram-nodes button { min-height: 32px; border: 1px solid var(--chat-line); }
+.iui-diagram-nodes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr)); gap: 6px; }
+.iui-diagram-nodes button { width: 100%; min-width: 0; min-height: 32px; border: 1px solid var(--chat-line); white-space: normal; overflow-wrap: anywhere; }
 .iui-diagram-nodes button[aria-pressed=true] { background: var(--chat-accent-soft); border-color: var(--chat-accent-line); color: var(--chat-accent); }
-.iui-connections { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
-.iui-connections li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; }
+.iui-connections { display: grid; grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) minmax(0, .6fr); gap: 4px 8px; margin-top: 10px; }
+.iui-connections li { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: baseline; font-size: 12px; }
+.iui-connections :is(span, small) { min-width: 0; overflow-wrap: anywhere; }
+.iui-connections span[aria-label] { text-align: center; }
 .iui-connections small { color: var(--chat-text-muted); }
 .iui-diagram-detail { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--chat-surface-soft); }
 .iui-diagram-detail p { white-space: pre-wrap; }
@@ -90,6 +92,8 @@
 .iui-source summary:hover { color: var(--chat-accent); }
 .iui-source pre { margin-top: 8px; padding: 12px; border-radius: 10px; background: var(--chat-surface-soft); overflow: auto; max-height: 300px; white-space: pre; font-size: 11px; }
 @container (max-width: 480px) {
+  .iui-connections { grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr); }
+  .iui-connections small { grid-column: 3; }
   .iui-control-group { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .iui-metrics > :last-child:nth-child(odd) { grid-column: 1 / -1; }
   .iui-header { gap: 4px 8px; }
