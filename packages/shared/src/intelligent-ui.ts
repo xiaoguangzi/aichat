@@ -3,6 +3,8 @@ import { z } from 'zod';
 const text = z.string().max(4000);
 const id = z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]{0,47}$/);
 const number = z.number().finite().min(-1e12).max(1e12);
+// Accept only the two numeric checkbox states, never general truthy coercion.
+const checked = z.union([z.boolean(), z.literal(0), z.literal(1)]).transform(value => value === true || value === 1);
 const base = { id, when: z.string().max(512).optional() };
 const option = z.object({ label: text, value: number });
 export const uiNodeSchema = z.discriminatedUnion('type', [
@@ -11,7 +13,7 @@ export const uiNodeSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('slider'), ...base, label: text, value: number, min: number, max: number, step: number.positive().default(1), unit: text.optional() }),
   z.object({ type: z.literal('select'), ...base, label: text, value: number, options: z.array(option).min(1).max(20) }),
   z.object({ type: z.literal('choice'), ...base, label: text, value: number, options: z.array(option).min(1).max(10) }),
-  z.object({ type: z.literal('check'), ...base, label: text, value: z.boolean().default(false), text: text.optional() }),
+  z.object({ type: z.literal('check'), ...base, label: text, value: checked.default(false), text: text.optional() }),
   z.object({ type: z.literal('metric'), ...base, label: text, expr: z.string().max(512), digits: z.number().int().min(0).max(6).default(2), unit: text.optional(), hint: text.optional() }),
   z.object({ type: z.literal('cards'), ...base, items: z.array(z.object({ title: text, text })).min(1).max(12) }),
   z.object({ type: z.literal('table'), ...base, columns: z.array(text).min(1).max(10), rows: z.array(z.array(text).max(10)).max(100) }),
@@ -43,6 +45,23 @@ export function parseUiFences(source: string): UiFence[] {
 }
 
 const viewSchema = z.object({ type: z.literal('view'), title: text.min(1), description: text.optional() });
+const displayTypes = new Set(['text', 'metric', 'cards', 'table', 'chart', 'diagram', 'action']);
+const expectedTypes: Record<string, string> = { string: '文本', number: '数值', boolean: '布尔值', array: '数组', object: '对象' };
+function componentError(index: number, error: z.ZodError): string {
+  const details = error.issues.slice(0, 3).map(issue => {
+    const field = issue.path.join('.') || '组件';
+    if (issue.path[0] === 'type') return 'type 不受支持';
+    if (issue.code === 'invalid_type') {
+      const expected = expectedTypes[issue.expected] ?? issue.expected;
+      return `${field} 缺失或类型无效，需要${expected}`;
+    }
+    if (issue.code === 'invalid_union' && issue.path[0] === 'value') return 'value 必须是 true/false 或 0/1';
+    if (issue.code === 'too_big') return `${field} 超过允许上限`;
+    if (issue.code === 'too_small') return `${field} 未达到允许下限`;
+    return `${field} 格式或取值无效`;
+  });
+  return `第 ${index + 1} 行：${details.join('；')}。`;
+}
 export function compileUi(code: string, complete: boolean) {
   const nodes: UiNode[] = [];
   const errors: string[] = [];
@@ -63,9 +82,17 @@ export function compileUi(code: string, complete: boolean) {
       continue;
     }
     if (!view) continue;
+    // Presentation nodes need identity only for rendering. Controls must keep an
+    // explicit ID: inventing one could silently break dependent expressions.
+    const generatedId = !!raw && typeof raw === 'object' && !Array.isArray(raw)
+      && !Object.hasOwn(raw, 'id') && displayTypes.has(String((raw as { type?: unknown }).type));
+    if (generatedId) raw = { ...raw as object, id: `ui_line_${index + 1}` };
     const parsed = uiNodeSchema.safeParse(raw);
-    if (!parsed.success) { errors.push(`第 ${index + 1} 行的组件不受支持或参数无效。`); continue; }
+    if (!parsed.success) { errors.push(componentError(index, parsed.error)); continue; }
     const node = parsed.data;
+    // Internal IDs cannot collide with the valid model ID namespace and stay
+    // stable as later rows arrive, including model IDs such as ui_line_20.
+    if (generatedId) node.id = `__ui_line_${index + 1}`;
     if (ids.has(node.id)) { errors.push(`第 ${index + 1} 行的组件 ID 重复。`); continue; }
     if ((node.type === 'slider' || node.type === 'number' || node.type === 'chart') && node.min >= node.max) {
       errors.push(`第 ${index + 1} 行的范围无效。`); continue;

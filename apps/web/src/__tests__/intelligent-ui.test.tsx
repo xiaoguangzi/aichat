@@ -134,6 +134,30 @@ it('survives corrupt saved state, shows invalid component errors, and exposes in
   expect(host.textContent).toContain('生成已中断');
 });
 
+it('renders recovered historical text and numeric checkboxes, preserving source and restoring checkbox state', async () => {
+  const historicalCode = [
+    { type: 'view', title: '校正清单' },
+    { type: 'text', text: '校正清单：估算是起点，务必用实测与体况回验。' },
+    { type: 'check', id: 'ref', label: '显示对比说明', value: 1 },
+    { type: 'check', id: 'risk', label: '显示边界与风险', value: 0 },
+    { type: 'text', id: 'details', text: '边界与风险已显示', when: 'risk == 1' },
+  ].map(node => JSON.stringify(node)).join('\n');
+  await mount(fence(historicalCode));
+  expect(host.textContent).toContain('校正清单：估算是起点，务必用实测与体况回验。');
+  expect(host.querySelector('.iui-error')).toBeNull();
+  expect(host.querySelector('.iui-source pre')?.textContent).toBe(historicalCode);
+  const checks = host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
+  expect(checks[0]?.checked).toBe(true);
+  expect(checks[1]?.checked).toBe(false);
+  expect([...host.querySelectorAll('.iui-text')].some(node => node.textContent === '边界与风险已显示')).toBe(false);
+  await act(async () => checks[1]!.click());
+  expect([...host.querySelectorAll('.iui-text')].some(node => node.textContent === '边界与风险已显示')).toBe(true);
+  await act(async () => root.unmount()); root = createRoot(host);
+  await mount(fence(historicalCode));
+  expect(host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')[1]?.checked).toBe(true);
+  expect([...host.querySelectorAll('.iui-text')].some(node => node.textContent === '边界与风险已显示')).toBe(true);
+});
+
 it('rechecks conversation ownership at click time and deduplicates pending follow-ups', async () => {
   let resolve: () => void = () => {};
   const send = vi.fn(() => new Promise<void>(done => { resolve = done; }));
