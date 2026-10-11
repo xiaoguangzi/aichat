@@ -192,3 +192,28 @@ it('renders plain replies without a process control and opens artifacts at their
   await act(async () => button('Demo').click());
   expect(host.querySelector('iframe')?.srcdoc).toContain('<h1>Artifact content</h1>');
 });
+
+it('keeps summarized reasoning collapsed behind a one-line summary while chat reasoning stays open', async () => {
+  const summaryThinking: Block = { type: 'thinking', thinking: 'Planning the search\nLooking up the official report', summarized: true };
+  const summarizedStep = message('step', [summaryThinking, tool], { stopReason: 'tool_use' });
+  await update({ messages: [user, summarizedStep, carrier], streaming: message('answer', [{ ...summaryThinking, thinking: '**Comparing sources**\nThe report' }]), running: true });
+  await mount();
+  expect(toggle().getAttribute('aria-expanded')).toBe('false');
+  expect(toggle().textContent).toContain('Comparing sources');
+  expect(host.textContent).not.toContain('mcp__exa__web_search_exa');
+  await act(async () => toggle().click());
+  expect(processDetails().textContent).toContain('Looking up the official report');
+  expect(processDetails().textContent).toContain('mcp__exa__web_search_exa');
+  await update({ streaming: message('answer', [summaryThinking, { type: 'text', text: 'Answer' }]) });
+  expect(toggle().getAttribute('aria-expanded')).toBe('true');
+  await update({ messages: [user, summarizedStep, carrier, message('answer', [summaryThinking, { type: 'text', text: 'Answer' }])], streaming: null, running: false });
+  await act(async () => toggle().click());
+  expect(toggle().getAttribute('aria-expanded')).toBe('false');
+  expect(toggle().textContent).toContain('Planning the search');
+  expect(outsideProcess()).toBe('Answer');
+
+  const signed: Block = { type: 'thinking', thinking: 'Legacy signed summary', signature: 'sig' };
+  await update({ messages: [user], streaming: message('legacy', [signed, tool]), running: true });
+  expect(toggle().getAttribute('aria-expanded')).toBe('false');
+  expect(toggle().textContent).toContain('Legacy signed summary');
+});

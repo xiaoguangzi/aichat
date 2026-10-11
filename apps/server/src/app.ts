@@ -15,18 +15,24 @@ import { httpLog } from './util/httpLog.js';
 import { config } from './config.js';
 import { settingsRoute } from './routes/settings.js';
 import { jevRoute } from './routes/jev.js';
+import { searchRoute } from './routes/search.js';
+import { searchIndex } from './search.js';
 
 export function createApp() {
   const app = new Hono();
   if (process.env.NODE_ENV !== 'test') app.use(httpLog());
 
   app.get('/api/health', (c) => c.json({ ok: true, version: '0.1.0' }));
+  // Backfill the message index once at start-up: a migration or a crash can leave rows unindexed,
+  // and a search that silently misses known messages is worse than a small delay on boot.
+  searchIndex.reindexMissing();
   app.route('/api/providers', providersRoute);
   app.route('/api/settings', settingsRoute);
   app.route('/api/jev', jevRoute);
   app.route('/api/conversations', conversationsRoute);
   app.route('/api/groups', groupsRoute);
   app.route('/api', chatRoute);
+  app.route('/api/search', searchRoute);
   app.route('/api/mcp', mcpRoute);
   app.route('/api/skills', skillsRoute);
   app.route('/api/uploads', uploadsRoute);

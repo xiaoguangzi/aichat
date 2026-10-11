@@ -13,8 +13,18 @@ const providers = [
 const routes: Record<string, unknown> = {
   '/api/providers': providers,
   '/api/mcp': [],
+  '/api/approvals/rules': [],
   '/api/skills': { dir: '/skills', skills: [{ name: 'example-skill', description: 'demo', dir: '', allowedTools: [], files: [], hasScripts: false, autoApprove: false }], warnings: [] },
   '/api/groups': [{ id: 'g1', name: 'Work', sortOrder: 0, collapsed: false, createdAt: '', updatedAt: '' }],
+  '/api/settings': { titleModelId: null, traceRetention: { autoPrune: true, maxCount: 500, maxTotalBytes: 134217728, maxAgeDays: 30, vacuumOnPrune: false } },
+  '/api/settings/storage': {
+    retention: { autoPrune: true, maxCount: 500, maxTotalBytes: 134217728, maxAgeDays: 30, vacuumOnPrune: false },
+    traces: { count: 12, bytes: 3_000_000, conversations: 2 },
+    db: { pageCount: 100, pageSize: 4096, freePages: 4, bytes: 409_600, reclaimableBytes: 16_384 },
+    uploads: { count: 2, bytes: 2048, orphaned: 1, orphanedBytes: 1024 },
+    toolResults: { count: 3, bytes: 9000 },
+    messages: { count: 8, bytes: 20_000 },
+  },
   '/api/conversations': [
     { id: 'c1', title: 'Hello', providerId: 'p1', modelId: 'm1', groupId: null, systemPrompt: '', settings: {}, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
     { id: 'c2', title: 'Grouped chat', providerId: 'p1', modelId: 'm1', groupId: 'g1', systemPrompt: '', settings: {}, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -106,10 +116,30 @@ describe('App renders without crashing', () => {
     expect(el.textContent).not.toContain('hello');
   });
   it('settings pages', async () => {
-    for (const p of ['/settings/providers', '/settings/mcp', '/settings/skills']) {
+    for (const p of ['/settings/providers', '/settings/mcp', '/settings/skills', '/settings/general', '/settings/data']) {
       const { el, errors } = await render(p);
       expect(errors, p + JSON.stringify(errors).slice(0, 2000)).toEqual([]);
       expect(el.textContent).not.toContain('The UI crashed');
     }
+  });
+  it('shows the model on the reply where a conversation switched models', async () => {
+    routes['/api/conversations/c3'] = { id: 'c3', title: 'Switched', providerId: 'p1', modelId: 'm1', systemPrompt: '', settings: {}, createdAt: '', updatedAt: '', messages: [
+      { id: 'u1', conversationId: 'c3', seq: 1, role: 'user', content: [{ type: 'text', text: 'first' }], createdAt: '' },
+      { id: 'a1', conversationId: 'c3', seq: 2, role: 'assistant', content: [{ type: 'text', text: 'first answer' }], stopReason: 'end_turn', model: { id: 'm1', modelId: 'mock', providerName: 'Mock', label: 'Mock / Mock' }, createdAt: '' },
+      { id: 'u2', conversationId: 'c3', seq: 3, role: 'user', content: [{ type: 'text', text: 'second' }], createdAt: '' },
+      { id: 'a2', conversationId: 'c3', seq: 4, role: 'assistant', content: [{ type: 'text', text: 'second answer' }], stopReason: 'end_turn', model: { id: null, modelId: 'legacy-model', providerName: 'Old', label: 'Old / legacy-model' }, createdAt: '' },
+    ] };
+    routes['/api/conversations/c3/traces'] = [];
+    const { el, errors } = await render('/c/c3');
+    expect(errors, JSON.stringify(errors).slice(0, 2000)).toEqual([]);
+    // Only the turn where the model changed is labelled; repeating it everywhere would be noise.
+    // (The picker also renders "Mock / Mock", so assert on the footer chip itself.)
+    const chip = el.querySelector<HTMLElement>('[title^="本轮由 Old / legacy-model"]');
+    expect(chip?.textContent).toBe('Old / legacy-model');
+    expect(chip?.getAttribute('title')).toContain('上一轮是 Mock / Mock');
+    // The model was deleted from settings; history must still say what answered.
+    expect(chip?.getAttribute('title')).toContain('该模型已从模型服务中删除');
+    expect(el.querySelector('[title^="本轮由 Mock / Mock"]')).toBeNull();
+    delete routes['/api/conversations/c3'];
   });
 });

@@ -1,4 +1,4 @@
-import type { Conversation, ConversationSettings } from '@aichat/shared';
+import type { Conversation, ConversationSettings, ConversationRouting } from '@aichat/shared';
 import { getDb, j } from '../database.js';
 import { nowIso, uuid } from '../../util/id.js';
 
@@ -10,6 +10,9 @@ interface Row {
   group_id: string | null;
   system_prompt: string;
   settings_json: string;
+  routing_json: string | null;
+  active_branch: string | null;
+  pinned: number;
   created_at: string;
   updated_at: string;
 }
@@ -22,6 +25,9 @@ const rowTo = (r: Row): Conversation => ({
   groupId: r.group_id,
   systemPrompt: r.system_prompt,
   settings: j.parse<ConversationSettings>(r.settings_json, {}),
+  routing: j.parse<ConversationRouting | null>(r.routing_json, null),
+  activeBranch: j.parse<string[]>(r.active_branch, []),
+  pinned: !!r.pinned,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });
@@ -47,7 +53,7 @@ export const conversationsRepo = {
     }
     const sql = `SELECT DISTINCT c.* FROM conversations c LEFT JOIN messages m ON m.conversation_id = c.id
        ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-       ORDER BY c.updated_at DESC LIMIT ${q ? 200 : 500}`;
+       ORDER BY c.pinned DESC, c.updated_at DESC LIMIT ${q ? 200 : 500}`;
     return (db.prepare(sql).all(...params) as unknown as Row[]).map(rowTo);
   },
   get(id: string): Conversation | null {
@@ -90,22 +96,30 @@ export const conversationsRepo = {
       groupId: string | null;
       systemPrompt: string;
       settings: ConversationSettings;
+      pinned?: boolean;
     }>,
   ): Conversation | null {
     const cur = this.get(id);
     if (!cur) return null;
     // Filing a chat into a group is not an edit: bumping updated_at would reshuffle the
     // sidebar (sorted by recency) under the user right after they organised it.
-    const onlyMoved = Object.keys(input).length > 0 && Object.keys(input).every((k) => k === 'groupId');
+    // Filing and pinning are organisation, not conversation edits: neither bumps updated_at, so the
+    // recency order of the sidebar does not jump around while the user tidies it.
+    const onlyMoved = Object.keys(input).length > 0 && Object.keys(input).every((k) => k === 'groupId' || k === 'pinned');
+    // Settings convention: `null` clears one field, `undefined` leaves it alone. Merging alone would
+    // store a literal null, which is not the same as absent for every reader of this object.
+    const settings = { ...cur.settings, ...(input.settings ?? {}) };
+    for (const [key, value] of Object.entries(settings)) if (value === null) delete (settings as Record<string, unknown>)[key];
     getDb()
-      .prepare('UPDATE conversations SET title=?, provider_id=?, model_id=?, group_id=?, system_prompt=?, settings_json=?, updated_at=? WHERE id=?')
+      .prepare('UPDATE conversations SET title=?, provider_id=?, model_id=?, group_id=?, pinned=?, system_prompt=?, settings_json=?, updated_at=? WHERE id=?')
       .run(
         input.title ?? cur.title,
         input.providerId === undefined ? cur.providerId : input.providerId,
         input.modelId === undefined ? cur.modelId : input.modelId,
         input.groupId === undefined ? cur.groupId : input.groupId,
+        (input.pinned === undefined ? cur.pinned : input.pinned) ? 1 : 0,
         input.systemPrompt ?? cur.systemPrompt,
-        j.str(input.settings ? { ...cur.settings, ...input.settings } : cur.settings),
+        j.str(settings),
         onlyMoved ? cur.updatedAt : nowIso(),
         id,
       );
@@ -113,6 +127,22 @@ export const conversationsRepo = {
   },
   touch(id: string) {
     getDb().prepare('UPDATE conversations SET updated_at=? WHERE id=?').run(nowIso(), id);
+  },
+  /**
+   * Record which path through the message tree is being viewed. A branch change is a view change,
+   * not an edit, so `updated_at` is left alone and the sidebar does not reshuffle under the reader.
+   */
+  setActiveBranch(id: string, branch: string[]): Conversation | null {
+    getDb().prepare('UPDATE conversations SET active_branch=? WHERE id=?').run(j.str(branch), id);
+    return this.get(id);
+  },
+  /** Selection and attempt marker commit in one SQLite statement before any model request. */
+  saveRouting(conv: Conversation, routing: ConversationRouting): Conversation {
+    const next = { ...conv, modelId: routing.modelId, providerId: routing.providerId, settings: { ...conv.settings, reasoning: routing.reasoning }, routing };
+    getDb().prepare('UPDATE conversations SET model_id=?, provider_id=?, settings_json=?, routing_json=? WHERE id=?').run(
+      next.modelId, next.providerId, j.str(next.settings), j.str(routing), conv.id,
+    );
+    return next;
   },
   delete(id: string): boolean {
     return getDb().prepare('DELETE FROM conversations WHERE id = ?').run(id).changes > 0;

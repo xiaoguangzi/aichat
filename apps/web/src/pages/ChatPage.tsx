@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { SlidersHorizontal, Download, X, Folder, FolderInput, PanelLeft, Activity } from 'lucide-react';
+import { SlidersHorizontal, Download, X, Folder, FolderInput, PanelLeft, Activity, Search } from 'lucide-react';
 import { useChat } from '../store/chat';
 import { useSettings } from '../store/settings';
 import { ConversationList } from '../components/chat/ConversationList';
@@ -11,6 +11,7 @@ import { ModelPicker } from '../components/chat/ModelPicker';
 import { ApprovalBanner } from '../components/chat/ApprovalBanner';
 import { ConversationSettingsPanel } from '../components/chat/ConversationSettings';
 import { RequestLogPanel } from '../components/chat/RequestLogPanel.js';
+import { SearchPanel } from '../components/chat/SearchPanel.js';
 import { GroupMenu } from '../components/chat/GroupMenu';
 import { ArtifactWorkspace, useArtifacts } from '../components/artifacts/ArtifactWorkspace.js';
 import { api } from '../api/client';
@@ -18,6 +19,7 @@ import { Welcome, StarterCards } from '../components/chat/Welcome.js';
 import { cn } from '../lib/utils';
 
 export function ChatPage() {
+  const [searchOpen, setSearchOpen] = useState(false);
   const { id } = useParams();
   const nav = useNavigate();
   const current = useChat((s) => s.current);
@@ -44,6 +46,19 @@ export function ChatPage() {
     window.addEventListener('keydown', close);
     return () => window.removeEventListener('keydown', close);
   }, [sidebarOpen]);
+
+  // Cmd/Ctrl+K opens message search from anywhere on the page, including while typing in the
+  // composer: it is the one shortcut worth taking from the input.
+  useEffect(() => {
+    const open = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', open);
+    return () => window.removeEventListener('keydown', open);
+  }, []);
 
   // Single source of truth for route <-> store sync. The two directions must not fire for the
   // same change, and the trigger has to be the route id *changing* rather than merely differing
@@ -110,6 +125,17 @@ export function ChatPage() {
           {current && (
             <button
               type="button"
+              onClick={() => setSearchOpen(true)}
+              className={iconBtn}
+              title="搜索消息内容 (Cmd/Ctrl+K)"
+              aria-label="搜索消息内容"
+            >
+              <Search size={15} />
+            </button>
+          )}
+          {current && (
+            <button
+              type="button"
               onClick={() => setShowLog(!showLog)}
               className={cn(iconBtn, showLog && 'bg-zinc-200/70 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200')}
               title="请求日志"
@@ -160,6 +186,12 @@ export function ChatPage() {
       </ArtifactWorkspace>
       {showSettings && <ConversationSettingsPanel onClose={() => setShowSettings(false)} />}
       {showLog && current && <RequestLogPanel conversationId={current.id} onClose={() => setShowLog(false)} />}
+      {searchOpen && (
+        <SearchPanel
+          onClose={() => setSearchOpen(false)}
+          scope={current ? { conversationId: current.id, title: current.title || '未命名对话' } : undefined}
+        />
+      )}
       </div>
     </div>
   );

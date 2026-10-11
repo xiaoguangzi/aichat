@@ -15,7 +15,7 @@ const provider: Provider = {
   hasApiKey: false, apiKeyMasked: '', extraHeaders: {}, compat: {}, createdAt: '',
   models: [{ id: 'first', providerId: 'p', modelId: 'first', displayName: 'First model',
     caps: { image: false, pdf: false, tools: true, thinking: true },
-    maxOutput: null, adaptive: false, reasoningMap: null, isDefault: false }],
+    maxOutput: null, contextWindow: null, adaptive: false, reasoningMap: null, isDefault: false }],
 };
 let root: Root;
 let host: HTMLDivElement;

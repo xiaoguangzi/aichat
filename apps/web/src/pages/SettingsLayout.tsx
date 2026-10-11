@@ -6,8 +6,10 @@ import { useChat } from '../store/chat.js';
 
 const tabs = [
   { to: '/settings/general', label: '通用' },
+  { to: '/settings/data', label: '数据与日志' },
   { to: '/settings/providers', label: '模型服务' },
   { to: '/settings/jev', label: 'Jev 决策' },
+  { to: '/settings/jev-routing', label: '自动路由' },
   { to: '/settings/mcp', label: 'MCP Servers' },
   { to: '/settings/skills', label: 'Skills' },
 ];

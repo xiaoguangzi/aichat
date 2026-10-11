@@ -12,6 +12,7 @@ export function ModelForm({ p, m, onDone, onCancel, onBusyChange }: { p: Provide
   const [modelId, setModelId] = useState(m?.modelId ?? '');
   const [name, setName] = useState(m?.displayName ?? '');
   const [maxOutput, setMaxOutput] = useState(m?.maxOutput?.toString() ?? '');
+  const [contextWindow, setContextWindow] = useState(m?.contextWindow?.toString() ?? '');
   const [caps, setCaps] = useState(m?.caps ?? defaultModelCaps(p));
   const [adaptive, setAdaptive] = useState(m?.adaptive ?? p.type === 'anthropic');
   const [map, setMap] = useState<ReasoningMap>(m?.reasoningMap ?? {});
@@ -25,8 +26,8 @@ export function ModelForm({ p, m, onDone, onCancel, onBusyChange }: { p: Provide
     try {
       if (!m && p.models.some((item) => item.modelId === modelId.trim())) throw new Error('该模型已添加，请在模型列表中编辑。');
       if (caps.thinking && REASONING_LEVELS.every((l) => !supported(l))) throw new Error('请至少保留一个支持的推理档位。');
-      const result = modelInputSchema.safeParse({ modelId: modelId.trim(), displayName: name.trim() || modelId.trim(), caps, adaptive, maxOutput: maxOutput ? Number(maxOutput) : null, reasoningMap: Object.keys(map).length ? map : null });
-      if (!result.success) throw new Error('请填写模型 ID；最大输出须为正整数或留空。');
+      const result = modelInputSchema.safeParse({ modelId: modelId.trim(), displayName: name.trim() || modelId.trim(), caps, adaptive, maxOutput: maxOutput ? Number(maxOutput) : null, contextWindow: contextWindow ? Number(contextWindow) : null, reasoningMap: Object.keys(map).length ? map : null });
+      if (!result.success) throw new Error('请填写模型 ID；最大输出与上下文窗口须为正整数或留空。');
       if (m) await api.providers.updateModel(p.id, m.id, result.data);
       else await api.providers.addModel(p.id, result.data);
       onDone();
@@ -52,6 +53,7 @@ export function ModelForm({ p, m, onDone, onCancel, onBusyChange }: { p: Provide
         <summary className="cursor-pointer p-3 text-xs font-medium text-zinc-600 dark:text-zinc-300">高级设置 · 输出限制{caps.thinking && '与推理兼容'}</summary>
         <div className="space-y-4 border-t border-zinc-100 p-4 dark:border-zinc-800">
           <Field label="最大输出 token 数" hint="留空使用应用默认值 64000。"><Input aria-label="最大输出 token 数" type="number" min={1} step={1} value={maxOutput} onChange={(e) => setMaxOutput(e.target.value)} placeholder="64000" /></Field>
+          <Field label="上下文窗口 token 数" hint="仅用于在输入框显示占用比例，不会自动截断历史。留空则不显示比例，只显示估算用量。"><Input aria-label="上下文窗口 token 数" type="number" min={1} step={1} value={contextWindow} onChange={(e) => setContextWindow(e.target.value)} placeholder="例如：128000" /></Field>
           {caps.thinking && <>
             {p.type === 'anthropic' && <Field label="思考模式" hint="开启发送 adaptive；关闭发送 enabled，适用于要求此格式的网关。"><Toggle checked={adaptive} onChange={setAdaptive} label="自适应思考（adaptive）" /></Field>}
             <p className="text-xs leading-5 text-zinc-500">勾选模型支持的档位。仅在接口使用不同名称时填写映射值；取消 off 表示无法关闭思考。</p>

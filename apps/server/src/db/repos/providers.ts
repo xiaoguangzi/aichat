@@ -19,6 +19,7 @@ interface ModelRow {
   display_name: string;
   caps_json: string;
   max_output: number | null;
+  context_window: number | null;
   reasoning_map: string | null;
   adaptive: number | null;
   is_default: number;
@@ -79,6 +80,7 @@ function rowToModel(r: ModelRow): Model {
     displayName: r.display_name,
     caps: parseCaps(r.caps_json),
     maxOutput: r.max_output,
+    contextWindow: r.context_window ?? null,
     adaptive: !!r.adaptive,
     reasoningMap: r.reasoning_map ? (j.parse<ReasoningMap>(r.reasoning_map, {}) as ReasoningMap) : null,
     isDefault: !!r.is_default,
@@ -165,7 +167,7 @@ export const modelsRepo = {
   },
   upsert(
     providerId: string,
-    input: { modelId: string; displayName?: string; caps?: Partial<ModelCaps>; maxOutput?: number | null; adaptive?: boolean | null; reasoningMap?: ReasoningMap | null; isDefault?: boolean },
+    input: { modelId: string; displayName?: string; caps?: Partial<ModelCaps>; maxOutput?: number | null; contextWindow?: number | null; adaptive?: boolean | null; reasoningMap?: ReasoningMap | null; isDefault?: boolean },
   ): Model {
     const db = getDb();
     const existing = db.prepare('SELECT * FROM models WHERE provider_id = ? AND model_id = ?').get(providerId, input.modelId) as unknown as
@@ -176,10 +178,11 @@ export const modelsRepo = {
     const protocolDefaultAdaptive = providersRepo.get(providerId)?.type === 'anthropic';
     if (existing) {
       const cur = rowToModel(existing);
-      db.prepare('UPDATE models SET display_name=?, caps_json=?, max_output=?, adaptive=?, reasoning_map=?, is_default=? WHERE id=?').run(
+      db.prepare('UPDATE models SET display_name=?, caps_json=?, max_output=?, context_window=?, adaptive=?, reasoning_map=?, is_default=? WHERE id=?').run(
         input.displayName ?? cur.displayName,
         j.str({ ...cur.caps, ...(input.caps ?? {}) }),
         input.maxOutput === undefined ? cur.maxOutput : input.maxOutput,
+        input.contextWindow === undefined ? cur.contextWindow : input.contextWindow,
         input.adaptive === undefined ? (cur.adaptive ? 1 : 0) : input.adaptive ? 1 : 0,
         input.reasoningMap === undefined ? (cur.reasoningMap ? j.str(cur.reasoningMap) : null) : input.reasoningMap ? j.str(input.reasoningMap) : null,
         input.isDefault === undefined ? (cur.isDefault ? 1 : 0) : input.isDefault ? 1 : 0,
@@ -189,13 +192,14 @@ export const modelsRepo = {
     }
     const id = uuid();
     const count = (db.prepare('SELECT COUNT(*) as c FROM models').get() as { c: number }).c;
-    db.prepare('INSERT INTO models(id,provider_id,model_id,display_name,caps_json,max_output,adaptive,reasoning_map,is_default) VALUES (?,?,?,?,?,?,?,?,?)').run(
+    db.prepare('INSERT INTO models(id,provider_id,model_id,display_name,caps_json,max_output,context_window,adaptive,reasoning_map,is_default) VALUES (?,?,?,?,?,?,?,?,?,?)').run(
       id,
       providerId,
       input.modelId,
       input.displayName ?? input.modelId,
       j.str({ ...defaultCaps, ...(input.caps ?? {}) }),
       input.maxOutput ?? null,
+      input.contextWindow ?? null,
       (input.adaptive ?? protocolDefaultAdaptive) ? 1 : 0,
       input.reasoningMap ? j.str(input.reasoningMap) : null,
       input.isDefault || count === 0 ? 1 : 0,

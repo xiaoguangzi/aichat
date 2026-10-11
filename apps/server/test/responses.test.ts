@@ -39,7 +39,7 @@ it('sends native Responses params and captures wire trace, text, summary and cac
   expect(body).toMatchObject({ instructions: 'System', stream: true, store: false, max_output_tokens: 200, reasoning: { effort: 'high', summary: 'auto' }, tools: [{ type: 'function', name: 'lookup', strict: false }] });
   for (const key of ['messages', 'max_tokens', 'max_completion_tokens', 'reasoning_effort', 'stream_options', 'previous_response_id']) expect(body).not.toHaveProperty(key);
   expect(events).toContainEqual({ type: 'text_delta', text: 'Hello' });
-  expect(events).toContainEqual({ type: 'thinking_delta', text: 'Thinking' });
+  expect(events).toContainEqual({ type: 'thinking_delta', text: 'Thinking', summarized: true });
   expect(events).toContainEqual({ type: 'responses_reasoning', item: { id: 'rs_1', encrypted_content: 'opaque', summary } });
   expect(events).toContainEqual({ type: 'usage', usage: { input: 40, output: 10, cacheRead: 20, inputUncached: 20, inputTotalKnown: true, usageComplete: true } });
   expect(traces.at(-1)).toMatchObject({ status: 'complete', requestId: 'req_1', responseId: 'resp_1', rawUsage: { input_tokens: 40 } });

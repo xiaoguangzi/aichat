@@ -36,6 +36,8 @@ export class ResponsesAdapter implements LLMAdapter {
     if (effort) params.reasoning = { effort: effort as OpenAI.ReasoningEffort, summary: 'auto' };
     else if (req.reasoning === 'off' && req.reasoningMap?.off) params.reasoning = { effort: req.reasoningMap.off as OpenAI.ReasoningEffort };
     if (req.temperature != null && this.provider.compat.sendTemperature !== false) params.temperature = req.temperature;
+    // Responses has no stop-sequence field; top_p is accepted like Chat Completions.
+    if (req.topP != null) params.top_p = req.topP;
     if (req.tools?.length) { params.tools = toResponsesTools(req.tools); params.tool_choice = 'auto'; }
     const client = trace.fetch ? this.client.withOptions({ fetch: trace.fetch }) : this.client;
     const { input, instructions, ...settings } = params;
@@ -55,7 +57,7 @@ export class ResponsesAdapter implements LLMAdapter {
           case 'response.created': responseId = ev.response.id; break;
           case 'response.output_text.delta': yield { type: 'text_delta', text: ev.delta }; break;
           case 'response.refusal.delta': refused = true; yield { type: 'text_delta', text: ev.delta }; break;
-          case 'response.reasoning_summary_text.delta': yield { type: 'thinking_delta', text: ev.delta }; break;
+          case 'response.reasoning_summary_text.delta': yield { type: 'thinking_delta', text: ev.delta, summarized: true }; break;
           case 'response.output_item.added':
             if (ev.item.type === 'function_call') {
               calls.set(ev.output_index, { id: ev.item.call_id, args: ev.item.arguments || '', ended: false });

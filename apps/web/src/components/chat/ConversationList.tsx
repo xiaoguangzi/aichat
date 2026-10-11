@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ProjectSettings } from './ProjectSettings.js';
 import {
   MessageSquarePlus,
+  Pin,
   Search,
+  Settings2,
   Settings,
   Pencil,
   Trash2,
@@ -119,6 +122,7 @@ export function ConversationList({ mobileOpen = false, onClose }: { mobileOpen?:
       <div className="px-3 pb-2.5">
         <div className="flex items-center gap-2 rounded-xl border border-black/[0.06] dark:border-white/[0.08] bg-black/[0.025] dark:bg-white/[0.04] px-2.5 py-1.5 text-xs transition-colors focus-within:bg-white dark:focus-within:bg-zinc-900 focus-within:border-accent-500/50 focus-within:ring-2 focus-within:ring-accent-500/15">
           <Search size={13} className="shrink-0 text-zinc-400" />
+          {/* titles are matched here; the message-level search lives behind Cmd/Ctrl+K */}
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -255,6 +259,7 @@ function GroupSection({
   const [name, setName] = useState<string | null>(null);
   const [gq, setGq] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [projectOpen, setProjectOpen] = useState(false);
   const [results, setResults] = useState<Conversation[] | null>(null);
   const inGroupQuery = gq.trim();
   // in-group search hits message text too, so it goes to the server rather than filtering locally
@@ -285,6 +290,8 @@ function GroupSection({
   };
 
   return (
+    <>
+    {projectOpen && <ProjectSettings group={group} onClose={() => setProjectOpen(false)} />}
     <div
       onDragOver={(e) => {
         if (e.dataTransfer.types.includes(CONV_MIME) || e.dataTransfer.types.includes(GROUP_MIME)) {
@@ -346,6 +353,15 @@ function GroupSection({
           />
         )}
         <div className={cn('flex items-center gap-0.5', name === null ? 'opacity-0 group-hover/h:opacity-100' : 'hidden')}>
+          <button
+            type="button"
+            title="项目设置（默认模型、指令、工具）"
+            aria-label={`项目设置：${group.name}`}
+            onClick={() => setProjectOpen(true)}
+            className="rounded-md p-1 text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-700 dark:hover:text-zinc-200"
+          >
+            <Settings2 size={12} />
+          </button>
           <button
             type="button"
             title="Search in this group"
@@ -421,6 +437,7 @@ function GroupSection({
         </div>
       )}
     </div>
+    </>
   );
 }
 
@@ -455,10 +472,25 @@ function ConversationRow({ conv, active }: { conv: Conversation; active: boolean
       )}
     >
       <div className="min-w-0 flex-1">
-        <div className="truncate text-xs leading-5">{conv.title || 'New chat'}</div>
+        <div className="flex items-center gap-1">
+          {conv.pinned && <Pin size={10} className="shrink-0 text-accent-500" fill="currentColor" aria-label="已置顶" />}
+          <span className="truncate text-xs leading-5">{conv.title || 'New chat'}</span>
+        </div>
         <div className="text-[10px] text-zinc-400 font-normal">{formatTime(conv.updatedAt)}</div>
       </div>
       <div className={cn('items-center gap-0.5 group-hover:flex', menuAt ? 'flex' : 'hidden')}>
+        <button
+          type="button"
+          className="rounded-md p-1 text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-700 dark:hover:text-zinc-200"
+          title={conv.pinned ? '取消置顶' : '置顶'}
+          aria-label={conv.pinned ? '取消置顶' : '置顶'}
+          onClick={(e) => {
+            e.stopPropagation();
+            void updateConversation(conv.id, { pinned: !conv.pinned });
+          }}
+        >
+          <Pin size={12} fill={conv.pinned ? 'currentColor' : 'none'} className={conv.pinned ? 'text-accent-500' : undefined} />
+        </button>
         <button
           type="button"
           className={cn(

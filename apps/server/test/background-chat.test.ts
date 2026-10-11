@@ -205,6 +205,8 @@ describe('background generation over real HTTP connections', () => {
     const reopened = await connect();
     const snapshot = (await reopened.until('snapshot')).data as ChatRunSnapshot;
     expect(snapshot.approval?.tool).toBe('skill__run_script');
+    // The remembered-decision key names the script, so approving one does not approve every script.
+    expect(snapshot.approval?.ruleKey).toBe('skill__run_script:demo');
     expect(snapshot.messages[1]?.content[0]?.type).toBe('tool_use');
     release();
     const approval = await fetch(`${base}/approvals/${snapshot.approval!.requestId}`, {

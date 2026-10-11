@@ -8,7 +8,7 @@ import { ModelForm } from '../components/providers/ModelForm.js';
 import { AddModels } from '../components/providers/AddModels.js';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-const p: Provider = { id: 'p', name: 'My provider', type: 'anthropic', baseUrl: 'https://example.com', hasApiKey: true, apiKeyMasked: '****', extraHeaders: { 'X-Custom': 'keep' }, compat: { effortParam: 'reasoning_effort', thinkingDisplay: false }, createdAt: '', models: [{ id: 'm', providerId: 'p', modelId: 'existing', displayName: 'Existing', caps: { image: false, pdf: true, tools: true, thinking: true }, maxOutput: 8192, adaptive: false, reasoningMap: { off: null, max: 'high' }, isDefault: true }] };
+const p: Provider = { id: 'p', name: 'My provider', type: 'anthropic', baseUrl: 'https://example.com', hasApiKey: true, apiKeyMasked: '****', extraHeaders: { 'X-Custom': 'keep' }, compat: { effortParam: 'reasoning_effort', thinkingDisplay: false }, createdAt: '', models: [{ id: 'm', providerId: 'p', modelId: 'existing', displayName: 'Existing', caps: { image: false, pdf: true, tools: true, thinking: true }, maxOutput: 8192, contextWindow: null, adaptive: false, reasoningMap: { off: null, max: 'high' }, isDefault: true }] };
 let root: Root;
 let el: HTMLDivElement;
 beforeEach(() => { el = document.createElement('div'); document.body.appendChild(el); root = createRoot(el); });

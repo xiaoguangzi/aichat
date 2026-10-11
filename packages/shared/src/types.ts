@@ -5,6 +5,8 @@ export type ThinkingBlock = {
   type: 'thinking';
   thinking: string;
   signature?: string;
+  /** Provider-written reasoning summary (Anthropic / Responses), not raw chain of thought. */
+  summarized?: boolean;
   /** Opaque Responses state, separate from Anthropic signatures. */
   responsesReasoning?: { id: string; encrypted_content: string; summary: Array<{ type: 'summary_text'; text: string }> };
 };
@@ -47,6 +49,44 @@ export interface Message {
   timing?: TurnTiming | null;
   stopReason?: StopReason | null;
   createdAt: string;
+  /**
+   * Snapshot of the model that produced this assistant message. The conversation keeps a single
+   * model at a time but it can be switched between turns, so attribution lives on the message.
+   */
+  model?: MessageModel | null;
+  /** The message this one follows. Every message but the first of a conversation has one. */
+  parentId?: string | null;
+  /**
+   * Present only when this message is one of several variants at its position. Computed at read
+   * time from the sibling group, so the message tree never has to leave the server.
+   */
+  variants?: MessageVariants | null;
+}
+
+/** Position of a message within its sibling group, for the ‹ n/m › control. */
+export interface MessageVariants {
+  /** 1-based position among the siblings, oldest first. */
+  index: number;
+  total: number;
+  siblingIds: string[];
+}
+
+/** A remembered answer to a tool approval prompt, so the same tool is not asked about again. */
+export interface ApprovalRule {
+  tool: string;
+  decidedAt: string;
+  /** False = this tool stays denied. Absent on rules written before the field existed: treat as allow. */
+  allow?: boolean;
+}
+
+export interface MessageModel {
+  /** Model row id; null when the model was removed from settings after the fact. */
+  id: string | null;
+  /** Endpoint model string that was actually sent (e.g. `claude-sonnet-4-5`). */
+  modelId: string;
+  providerName: string;
+  /** Rendered label; a snapshot so history stays readable after renames or deletions. */
+  label: string;
 }
 
 export type StopReason = 'end_turn' | 'tool_use' | 'max_tokens' | 'refusal' | 'interrupted' | 'error' | 'other';
@@ -81,7 +121,8 @@ export interface Usage {
 export type StreamEvent =
   | { type: 'responses_reasoning'; item: NonNullable<ThinkingBlock['responsesReasoning']> }
   | { type: 'text_delta'; text: string }
-  | { type: 'thinking_delta'; text: string; signature?: string }
+  /** summarized: provider-written reasoning summary rather than raw reasoning */
+  | { type: 'thinking_delta'; text: string; signature?: string; summarized?: true }
   | { type: 'tool_call_start'; id: string; name: string }
   | { type: 'tool_call_delta'; id: string; argsDelta: string }
   | { type: 'tool_call_end'; id: string; input: unknown }
@@ -94,8 +135,14 @@ export type StreamEvent =
 
 export interface ChatApproval {
   requestId: string;
+  /** Tool as the model called it (e.g. skill__run_script). */
   tool: string;
   input: unknown;
+  /**
+   * Identity a remembered decision is keyed by; differs from `tool` when one tool serves several
+   * targets, such as which skill script is being run.
+   */
+  ruleKey?: string;
 }
 
 export interface ChatRunSnapshot {
@@ -106,20 +153,39 @@ export interface ChatRunSnapshot {
   approval: ChatApproval | null;
   running: boolean;
   error: string | null;
+  /** Payload size of the request this run sent; absent when the run has not reached the model yet. */
+  context?: ContextEstimate | null;
+}
+
+/**
+ * Character-class heuristic for budgeting, never an exact tokenizer count. `budget` and `ratio` are
+ * null unless the model declares a context window, because inventing a denominator would turn a
+ * rough number into a misleading percentage.
+ */
+export interface ContextEstimate {
+  system: number;
+  tools: number;
+  history: number;
+  total: number;
+  budget: number | null;
+  /** Output capacity reserved for this turn (the request's max output). */
+  reservedOutput: number;
+  ratio: number | null;
 }
 
 export type ChatSSEEvent =
+  | { event: 'routing'; data: { conversation: Conversation } }
   | { event: 'snapshot'; data: ChatRunSnapshot }
   | { event: 'approval_state'; data: { approval: ChatApproval | null } }
   | { event: 'message_start'; data: { messageId: string; role: Role } }
   | { event: 'text_delta'; data: { text: string } }
-  | { event: 'thinking_delta'; data: { text: string } }
+  | { event: 'thinking_delta'; data: { text: string; summarized?: true } }
   /** move the text of the message being streamed into a thinking block (leaked </think>) */
   | { event: 'thinking_reclassify'; data: Record<string, never> }
   | { event: 'tool_call'; data: { id: string; name: string; input: unknown } }
   | { event: 'tool_call_start'; data: { id: string; name: string } }
   | { event: 'tool_result'; data: { toolUseId: string; content: Block[]; isError: boolean; durationMs: number } }
-  | { event: 'approval_required'; data: { requestId: string; tool: string; input: unknown } }
+  | { event: 'approval_required'; data: ChatApproval }
   | { event: 'usage'; data: Usage }
   | { event: 'timing'; data: { messageId: string; timing: TurnTiming } }
   | { event: 'message_end'; data: { messageId: string; stopReason: StopReason; message: Message } }
@@ -214,14 +280,26 @@ export interface Model {
   adaptive: boolean;
   /** which levels this endpoint accepts (null value = unsupported) and what literal each sends */
   reasoningMap: ReasoningMap | null;
+  /**
+   * Declared context window in tokens, used only to show an occupancy ratio in the composer.
+   * Null means "not declared": the UI then shows the raw estimate with no percentage, because a
+   * guessed denominator would be worse than none. Never used to truncate history automatically.
+   */
+  contextWindow: number | null;
   isDefault: boolean;
 }
 
 // ---------- Conversations ----------
 
 export interface ConversationSettings {
+  /** Snapshot of first-message routing opt-in; never implicitly enabled on existing chats. */
+  autoRoute?: boolean;
   temperature?: number | null;
   maxTokens?: number | null;
+  /** Nucleus sampling. Null/absent leaves the endpoint default in place. */
+  topP?: number | null;
+  /** Stop sequences; empty/absent sends none. Endpoints cap the count, so this is trimmed to 4. */
+  stop?: string[] | null;
   enabledMcpServers?: string[] | 'all';
   enabledSkills?: string[] | 'all';
   /**
@@ -241,16 +319,34 @@ export interface Conversation {
   groupId: string | null;
   systemPrompt: string;
   settings: ConversationSettings;
+  routing?: import('./jev.js').ConversationRouting | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * Visible path through the message tree, root first. Empty/absent means "show every message in
+   * sequence order", which is what conversations created before branching have.
+   */
+  activeBranch?: string[];
+  /** Pinned conversations sort above the rest of their section. */
+  pinned?: boolean;
 }
 
-/** A user-named folder in the sidebar; conversations are dragged in and out of it. */
+/**
+ * A user-named folder in the sidebar. It doubles as a "project": the defaults below are applied to
+ * conversations created inside it (through "New chat" in the group header), which is what makes a
+ * recurring setup — same model, same tools, same standing instructions — one click.
+ */
 export interface ConversationGroup {
   id: string;
   name: string;
   sortOrder: number;
   collapsed: boolean;
+  /** Prepended to the system prompt of conversations created in this group; empty = nothing added. */
+  instructions: string;
+  /** Default model for new conversations here; null = whatever is the app default. */
+  modelId: string | null;
+  /** Default conversation settings for new conversations here. */
+  settings: ConversationSettings;
   createdAt: string;
   updatedAt: string;
 }

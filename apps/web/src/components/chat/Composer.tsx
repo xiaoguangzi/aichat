@@ -8,7 +8,9 @@ import { useSettings, useAllModels } from '../../store/settings';
 import { WebSearchToggle } from './WebSearchToggle.js';
 import { SlashMenu } from './SlashMenu';
 import { ReasoningPicker } from './ReasoningPicker';
+import { AutoRouting, useAutoRouteOn } from './AutoRouting.js';
 import { formatBytes, cn } from '../../lib/utils';
+import { ContextMeter } from './ContextMeter.js';
 
 export function Composer({ quote, starter }: { quote?: { text: string; conversationId: string | undefined } | null; starter?: { text: string } | null }) {
   const send = useChat((s) => s.send);
@@ -16,6 +18,7 @@ export function Composer({ quote, starter }: { quote?: { text: string; conversat
   const running = useChat((s) => s.running);
   const current = useChat((s) => s.current);
   const draftModelId = useChat((s) => s.draftModelId);
+  const autoRouteOn = useAutoRouteOn();
   const skills = useSettings((s) => s.skills);
   const models = useAllModels();
 
@@ -27,12 +30,14 @@ export function Composer({ quote, starter }: { quote?: { text: string; conversat
   const ta = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const context = useChat((s) => s.context);
   const activeModelId = current?.modelId ?? draftModelId;
   const model = resolveChatModel(models, activeModelId);
 
   // Upload filter follows the model's declared input modalities; unknown model = allow everything.
-  const canImage = model?.caps.image !== false;
-  const canPdf = model?.caps.pdf !== false;
+  const pendingRoute = !current?.routing && autoRouteOn;
+  const canImage = pendingRoute || model?.caps.image !== false;
+  const canPdf = pendingRoute || model?.caps.pdf !== false;
   // Office files are extracted to text server-side, so every model can take them.
   const alwaysOk = '.txt,.md,.json,.csv,text/*,.docx,.xlsx,.pptx';
   const accept = canImage && canPdf ? undefined : [canImage && 'image/*', canPdf && '.pdf,application/pdf', alwaysOk].filter(Boolean).join(',');
@@ -141,6 +146,7 @@ export function Composer({ quote, starter }: { quote?: { text: string; conversat
       onDrop={onDrop}
     >
       <div className="relative mx-auto max-w-3xl">
+        <AutoRouting />
         {slash && <SlashMenu skills={skills} query={slash[1]!} active={slashIdx} onPick={(n) => { setText(`/${n} `); ta.current?.focus(); }} />}
 
         {/* Attachment preview list */}
@@ -251,13 +257,14 @@ export function Composer({ quote, starter }: { quote?: { text: string; conversat
           </div>
         </div>
 
-        {/* Keyboard hints */}
-        <div className="mt-2 text-center text-[11px] text-zinc-400 dark:text-zinc-500">
+        {/* Keyboard hints, with the assembled-request estimate on the right */}
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-x-1.5 text-center text-[11px] text-zinc-400 dark:text-zinc-500">
           <span><kbd className="font-mono">Enter</kbd> 发送</span>
-          <span className="mx-1.5">·</span>
+          <span>·</span>
           <span><kbd className="font-mono">Shift+Enter</kbd> 换行</span>
-          <span className="mx-1.5">·</span>
+          <span>·</span>
           <span><kbd className="font-mono text-zinc-500 dark:text-zinc-400">/name</kbd> 调用技能</span>
+          {context && <span className="ml-auto"><ContextMeter estimate={context} /></span>}
         </div>
       </div>
     </div>

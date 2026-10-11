@@ -38,7 +38,7 @@ describe('title model selection', () => {
     const app = createApp();
     const saved = await app.request('/api/settings', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ titleModelId: title.id }) });
     expect(saved.status).toBe(200);
-    expect(await (await app.request('/api/settings')).json()).toEqual({ titleModelId: title.id });
+    expect(await (await app.request('/api/settings')).json()).toMatchObject({ titleModelId: title.id });
     expect(await generateTitle(conv, 'a'.repeat(4000), 'b'.repeat(4000))).toBe('简短标题');
     expect(getAdapter).toHaveBeenCalledWith(expect.objectContaining({ id: titleProvider.id, apiKey: 'title-secret' }));
     expect(calls[0]).toMatchObject({ model: 'cheap-title', reasoning: 'minimal', maxTokens: 512 });

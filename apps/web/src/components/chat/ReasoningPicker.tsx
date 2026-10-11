@@ -112,6 +112,7 @@ export function ReasoningPicker() {
   if (!levels.length) return null;
 
   const value = current?.settings.reasoning ?? draftReasoning ?? defaultReasoning(levels);
+  const locked = !!current?.routing;
 
   const set = async (level: ReasoningLevel) => {
     rememberReasoning(level);
@@ -128,7 +129,7 @@ export function ReasoningPicker() {
       {/* Visual pill button - modern, clickable, reliable */}
       <button
         type="button"
-        disabled={running}
+        disabled={running || locked}
         onClick={() => setOpen((prev) => !prev)}
         className={cn(
           'group inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-all duration-150',
@@ -137,7 +138,7 @@ export function ReasoningPicker() {
           'text-zinc-700 dark:text-zinc-300 shadow-2xs active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none',
           open && 'border-accent-500/50 dark:border-accent-500/50 ring-2 ring-accent-500/15 bg-white dark:bg-zinc-800',
         )}
-        title="Thinking effort — applies to this conversation, and becomes the default for new ones"
+        title={locked ? 'Jev 已固定此会话的 effort；更改请新建会话' : 'Thinking effort — applies to this conversation, and becomes the default for new ones'}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
@@ -212,7 +213,7 @@ export function ReasoningPicker() {
       {/* Semantic hidden select for accessibility and testing compatibility */}
       <select
         value={value}
-        disabled={running}
+        disabled={running || locked}
         tabIndex={-1}
         aria-hidden="true"
         onChange={(e) => void set(e.target.value as ReasoningLevel)}

@@ -4,6 +4,9 @@ import type { McpServer, Model, Provider, SkillInfo } from '@aichat/shared';
 import { api } from '../api/client';
 
 interface SettingsState {
+  routingDefault: boolean;
+  routingLoaded: boolean;
+  loadRouting: () => Promise<void>;
   providers: Provider[];
   mcpServers: McpServer[];
   skills: SkillInfo[];
@@ -33,6 +36,8 @@ function once(key: string, run: () => Promise<void>): Promise<void> {
 }
 
 export const useSettings = create<SettingsState>((set, get) => ({
+  routingDefault: false,
+  routingLoaded: false,
   providers: [],
   mcpServers: [],
   skills: [],
@@ -44,6 +49,11 @@ export const useSettings = create<SettingsState>((set, get) => ({
     set({ loaded: true });
   },
   loadProviders: () => once('providers', async () => set({ providers: await api.providers.list() })),
+  loadRouting: () =>
+    once('routing', async () => {
+      if (get().routingLoaded) return;
+      set({ routingDefault: (await api.jev.routing()).enabled, routingLoaded: true });
+    }),
   loadMcp: () => once('mcp', async () => set({ mcpServers: await api.mcp.list() })),
   loadSkills: () =>
     once('skills', async () => {

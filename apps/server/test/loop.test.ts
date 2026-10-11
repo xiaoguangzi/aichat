@@ -12,13 +12,15 @@ process.env.SKILLS_DIR = path.join(tmp, 'skills');
 const calls: unknown[] = [];
 let largeResult = false;
 let truncatedResponses = false;
+/** Off by default; the tool-loop tests need the first call to ask for a tool. */
+let toolLoop = true;
 vi.mock('../src/llm/registry.js', () => ({
   getAdapter: () => ({
     type: 'openai',
     listModels: async () => [],
     async *stream(req: unknown): AsyncIterable<StreamEvent> {
       calls.push({ ...(req as object), messages: [...(req as { messages: unknown[] }).messages] });
-      if (calls.length === 1) {
+      if (toolLoop && calls.length === 1) {
         yield { type: 'text_delta', text: 'let me check' };
         yield { type: 'tool_call_start', id: 't1', name: 'mcp__demo__echo' };
         if (truncatedResponses) { yield { type: 'done', stopReason: 'max_tokens' }; return; }
@@ -52,16 +54,26 @@ const { ensureDirs } = await import('../src/config.js');
 const { providersRepo, modelsRepo } = await import('../src/db/repos/providers.js');
 const { conversationsRepo } = await import('../src/db/repos/conversations.js');
 const { messagesRepo } = await import('../src/db/repos/messages.js');
-const { runAgent } = await import('../src/agent/loop.js');
+const { BlockBuilder, runAgent } = await import('../src/agent/loop.js');
 
 beforeEach(() => {
   calls.length = 0;
   largeResult = false;
   truncatedResponses = false;
+  toolLoop = true;
   ensureDirs();
   initDb(path.join(tmp, `t-${Date.now()}.db`));
 });
 afterEach(() => closeDb());
+
+it('marks provider-written reasoning summaries without touching raw reasoning', () => {
+  const blocks = new BlockBuilder();
+  blocks.thinking('raw');
+  blocks.text('answer');
+  blocks.thinking('summary', undefined, true);
+  blocks.thinking(' continues', 'sig', true);
+  expect(blocks.blocks).toEqual([{ type: 'thinking', thinking: 'raw', signature: undefined }, { type: 'text', text: 'answer' }, { type: 'thinking', thinking: 'summary continues', signature: 'sig', summarized: true }]);
+});
 
 describe('runAgent', () => {
   it.each(['openai', 'anthropic'] as const)('handles a large result then a saved-original read with %s', async type => {
@@ -115,6 +127,28 @@ describe('runAgent', () => {
     // second request contained the tool result in history
     const second = calls[1] as { messages: Array<{ role: string }> };
     expect(second.messages.map((x) => x.role)).toEqual(['user', 'assistant', 'user']);
+  });
+
+  it('attributes each assistant message to the model that produced it', async () => {
+    toolLoop = false; // one model call per turn keeps the message indices predictable
+    const p = providersRepo.create({ name: 'My Provider', type: 'openai', baseUrl: 'http://x', apiKey: 'k' });
+    const display = modelsRepo.upsert(p.id, { modelId: 'gpt-test', displayName: 'GPT Test' });
+    const other = modelsRepo.upsert(p.id, { modelId: 'other-model' });
+    const conv = conversationsRepo.create({ providerId: p.id, modelId: display.id });
+    messagesRepo.create({ conversationId: conv.id, role: 'user', content: [{ type: 'text', text: 'first' }] });
+    const signal = new AbortController().signal;
+
+    await runAgent({ conversation: conversationsRepo.get(conv.id)!, signal, emit: () => {} });
+    // Switch models mid-conversation: the conversation row changes, stored history must not.
+    conversationsRepo.update(conv.id, { modelId: other.id, providerId: p.id });
+    messagesRepo.create({ conversationId: conv.id, role: 'user', content: [{ type: 'text', text: 'second' }] });
+    await runAgent({ conversation: conversationsRepo.get(conv.id)!, signal, emit: () => {} });
+
+    const msgs = messagesRepo.list(conv.id);
+    expect(msgs[0]!.model).toBeNull();
+    expect(msgs[1]!.model).toEqual({ id: display.id, modelId: 'gpt-test', providerName: 'My Provider', label: 'My Provider / GPT Test' });
+    expect(msgs[2]!.model).toBeNull();
+    expect(msgs[3]!.model).toEqual({ id: other.id, modelId: 'other-model', providerName: 'My Provider', label: 'My Provider / other-model' });
   });
 });
 

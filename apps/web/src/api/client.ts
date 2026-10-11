@@ -1,6 +1,7 @@
-import type { ApiTrace, ApiTraceDetail, Attachment, Conversation, ConversationGroup, GroupInput, GroupPatch, McpServer, McpServerInput, McpToolInfo, Message, Model, ModelInput, Provider, ProviderInput, SkillInfo, ConversationInput } from '@aichat/shared';
+import type { ApprovalRule, ApiTrace, ApiTraceDetail, Attachment, Conversation, ConversationGroup, GroupInput, GroupPatch, McpServer, McpServerInput, McpToolInfo, Message, Model, ModelInput, Provider, ProviderInput, SkillInfo, ConversationInput } from '@aichat/shared';
 import type { ArtifactEdit, AppSettings } from '@aichat/shared';
-import type { JevSettings, JevSettingsInput, JevRequest, JevResult } from '@aichat/shared';
+import type { BackupInfo, ContextEstimate, PruneResult, SearchHit, StorageStats } from '@aichat/shared';
+import type { JevSettings, JevSettingsInput, JevRequest, JevResult, JevRoutingSettings } from '@aichat/shared';
 
 export class ApiError extends Error {
   constructor(
@@ -33,6 +34,8 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
 
 export const api = {
   jev: {
+    routing: () => req<JevRoutingSettings>('GET', '/api/jev/routing'),
+    saveRouting: (input: JevRoutingSettings) => req<JevRoutingSettings>('PUT', '/api/jev/routing', input),
     settings: () => req<JevSettings>('GET', '/api/jev/settings'),
     saveSettings: (input: JevSettingsInput) => req<JevSettings>('PUT', '/api/jev/settings', input),
     evaluate: (input: JevRequest) => req<JevResult>('POST', '/api/jev/evaluate', input),
@@ -40,6 +43,16 @@ export const api = {
   settings: {
     get: () => req<AppSettings>('GET', '/api/settings'),
     update: (input: AppSettings) => req<AppSettings>('PUT', '/api/settings', input),
+    storage: () => req<StorageStats>('GET', '/api/settings/storage'),
+    prune: (opts?: { mode?: 'keep' | 'hard'; vacuum?: boolean }) => {
+      const p = new URLSearchParams();
+      if (opts?.mode) p.set('mode', opts.mode);
+      if (opts?.vacuum) p.set('vacuum', 'true');
+      return req<PruneResult>('POST', `/api/settings/storage/prune${p.size ? `?${p}` : ''}`);
+    },
+    vacuum: () => req<{ reclaimedBytes: number }>('POST', '/api/settings/storage/vacuum'),
+    backups: () => req<{ dir: string; max: number; dbBytes: number; backups: BackupInfo[] }>('GET', '/api/settings/backups'),
+    backup: () => req<BackupInfo>('POST', '/api/settings/backups'),
   },
   providers: {
     list: () => req<Provider[]>('GET', '/api/providers'),
@@ -60,12 +73,27 @@ export const api = {
       return req<Conversation[]>('GET', `/api/conversations${p.size ? `?${p}` : ''}`);
     },
     create: (input?: ConversationInput) => req<Conversation>('POST', '/api/conversations', input ?? {}),
-    get: (id: string) => req<Conversation & { messages: Message[]; running?: boolean }>('GET', `/api/conversations/${id}`),
+    get: (id: string) => req<Conversation & { messages: Message[]; running?: boolean; context?: ContextEstimate | null }>('GET', `/api/conversations/${id}`),
     update: (id: string, input: ConversationInput) => req<Conversation>('PUT', `/api/conversations/${id}`, input),
     remove: (id: string) => req<{ ok: true }>('DELETE', `/api/conversations/${id}`),
     deleteFrom: (id: string, mid: string) => req<{ ok: true }>('DELETE', `/api/conversations/${id}/messages/${mid}`),
     stop: (id: string) => req<{ ok: boolean }>('POST', `/api/conversations/${id}/stop`),
+    undoDelete: (id: string) => req<Conversation & { messages: Message[]; restored: number }>('POST', `/api/conversations/${id}/undo-delete`),
+    /** Show a different variant at this position; the server derives the whole path. */
+    branch: (id: string, messageId: string) => req<Conversation & { messages: Message[] }>('POST', `/api/conversations/${id}/branch`, { messageId }),
     exportUrl: (id: string) => `/api/conversations/${id}/export`,
+  },
+  search: {
+    messages: (opts: { q: string; role?: 'user' | 'assistant'; since?: string; conversationId?: string; groupId?: string; limit?: number }) => {
+      const p = new URLSearchParams({ q: opts.q });
+      if (opts.role) p.set('role', opts.role);
+      if (opts.since) p.set('since', opts.since);
+      if (opts.conversationId) p.set('conversationId', opts.conversationId);
+      if (opts.groupId) p.set('groupId', opts.groupId);
+      if (opts.limit) p.set('limit', String(opts.limit));
+      return req<SearchHit[]>('GET', `/api/search?${p}`);
+    },
+    reindex: () => req<{ indexed: number; total: number }>('POST', '/api/search/reindex'),
   },
   traces: {
     list: (id: string, turnId?: string) => req<ApiTrace[]>('GET', `/api/conversations/${id}/traces${turnId ? `?turnId=${encodeURIComponent(turnId)}` : ''}`),
@@ -82,7 +110,11 @@ export const api = {
     remove: (id: string) => req<{ ok: true }>('DELETE', `/api/groups/${id}`),
     reorder: (ids: string[]) => req<ConversationGroup[]>('POST', '/api/groups/reorder', { ids }),
   },
-  approvals: { resolve: (id: string, approve: boolean) => req<{ ok: true }>('POST', `/api/approvals/${id}`, { approve }) },
+  approvals: {
+    resolve: (id: string, approve: boolean, remember = false) => req<{ ok: true; remembered: string | null }>('POST', `/api/approvals/${id}`, { approve, remember }),
+    rules: () => req<ApprovalRule[]>('GET', '/api/approvals/rules'),
+    forgetRule: (tool: string) => req<{ ok: true }>('DELETE', `/api/approvals/rules/${encodeURIComponent(tool)}`),
+  },
   mcp: {
     list: () => req<McpServer[]>('GET', '/api/mcp'),
     create: (input: McpServerInput) => req<McpServer>('POST', '/api/mcp', input),

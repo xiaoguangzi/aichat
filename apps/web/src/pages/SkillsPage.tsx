@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import type { SkillInfo } from '@aichat/shared';
+import { useCallback, useEffect, useState } from 'react';
+import type { ApprovalRule, SkillInfo } from '@aichat/shared';
 import { RefreshCw, FolderOpen, ScrollText } from 'lucide-react';
 import { api } from '../api/client';
 import { useSettings } from '../store/settings';
@@ -10,8 +10,19 @@ import { Markdown } from '../components/ui/Markdown';
 
 export function SkillsPage() {
   const { skills, skillsDir, skillWarnings, loadSkills } = useSettings();
+  const [rules, setRules] = useState<ApprovalRule[]>([]);
   const [view, setView] = useState<(SkillInfo & { body: string }) | null>(null);
-  useEffect(() => { void loadSkills(); }, [loadSkills]);
+  // Remembered approvals are secondary information: a failure to list them must not take the page
+  // down or mask the skills themselves.
+  const loadRules = useCallback(async () => {
+    try {
+      setRules(await api.approvals.rules());
+    } catch {
+      setRules([]);
+    }
+  }, []);
+  const forget = async (tool: string) => { await api.approvals.forgetRule(tool); await loadRules(); };
+  useEffect(() => { void loadSkills(); void loadRules(); }, [loadSkills, loadRules]);
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
@@ -42,6 +53,22 @@ export function SkillsPage() {
           </div>
         </div>
       ))}
+      {rules.length > 0 && (
+        <div className="card space-y-2 p-4">
+          <div className="text-sm font-medium">已记住的授权决定</div>
+          <p className="text-xs leading-5 text-zinc-500">
+            在权限提示里勾选「记住这个决定」后，同一个脚本不再询问。删除这里的条目即可恢复每次询问。
+          </p>
+          {rules.map((rule) => (
+            <div key={rule.tool} className="flex items-center gap-2 text-xs">
+              <span className="min-w-0 flex-1 truncate font-mono text-zinc-600 dark:text-zinc-400" title={rule.tool}>{rule.tool}</span>
+              <span className={rule.allow === false ? 'text-red-500' : 'text-accent-600'}>{rule.allow === false ? '已拒绝' : '已允许'}</span>
+              <span className="text-zinc-400">{new Date(rule.decidedAt).toLocaleDateString()}</span>
+              <Button size="sm" onClick={() => void forget(rule.tool)}>取消</Button>
+            </div>
+          ))}
+        </div>
+      )}
       {view && (
         <Modal title={`SKILL.md — ${view.name}`} onClose={() => setView(null)} wide>
           <Markdown text={view.body} />

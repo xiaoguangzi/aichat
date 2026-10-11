@@ -1,6 +1,6 @@
 import { memo, useState } from 'react';
 import type { Message, ToolResultBlock, Usage } from '@aichat/shared';
-import { Check, Copy, Pencil, RefreshCw, FileText, AlertCircle } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, ChevronsRight, Copy, Pencil, RefreshCw, FileText, AlertCircle } from 'lucide-react';
 import { ArtifactMessage } from '../artifacts/ArtifactMessage.js';
 import { ImagePreview } from './ImagePreview.js';
 import { ThinkingBlock } from './ThinkingBlock';
@@ -27,9 +27,18 @@ interface Props {
   footerUsage?: Usage | null;
   /** text of the whole turn, so Copy on a multi-step turn yields the whole reply */
   footerText?: string;
+  /**
+   * Label of the previous turn's model, set only when this turn used a different one. The footer
+   * names the model only where that changed: in a single-model conversation it is pure noise.
+   */
+  modelSwitch?: string;
+  /** Show another variant at this position. Absent while a reply is streaming. */
+  onSwitchBranch?: (messageId: string) => void;
+  /** Keep generating from this reply; offered when it stopped at the length limit. */
+  onContinue?: (messageId: string) => void;
 }
 
-export const MessageItem = memo(function MessageItem({ message, streaming, results, onRegenerate, onEdit, isLastAssistant, hideProcess, textStartIndex = 0, showFooter = true, footerUsage, footerText }: Props) {
+export const MessageItem = memo(function MessageItem({ message, streaming, results, onRegenerate, onEdit, isLastAssistant, hideProcess, textStartIndex = 0, showFooter = true, footerUsage, footerText, modelSwitch, onSwitchBranch, onContinue }: Props) {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -41,6 +50,7 @@ export const MessageItem = memo(function MessageItem({ message, streaming, resul
     return (
       <div className="group flex justify-end">
         <div className="max-w-[85%] sm:max-w-[80%]">
+          <VariantSwitcher message={message} onSwitchBranch={onSwitchBranch} align="right" />
           {atts.length > 0 && (
             <div className="mb-1.5 flex flex-wrap justify-end gap-2">
               {atts.map((b, i) =>
@@ -137,14 +147,26 @@ export const MessageItem = memo(function MessageItem({ message, streaming, resul
             <AlertCircle size={13} /> Error (partial output)
           </div>
         )}
+        <VariantSwitcher message={message} onSwitchBranch={onSwitchBranch} align="left" />
         {!streaming && showFooter && (
           <div className="mt-2 flex flex-wrap items-center gap-1 text-xs text-zinc-400">
+            {message.model && modelSwitch && <span
+              title={`本轮由 ${message.model.label} 生成，上一轮是 ${modelSwitch}${message.model.id ? '' : '。该模型已从模型服务中删除'}`}
+              className="mr-1 max-w-56 truncate rounded px-1.5 py-0.5 text-[11px] text-zinc-500 bg-zinc-100 dark:bg-zinc-800/80 dark:text-zinc-400"
+            >
+              {message.model.label}
+            </span>}
             <IconBtn title="Copy" onClick={async () => { if (await copyText(footerText ?? plain)) { setCopied(true); setTimeout(() => setCopied(false), 1200); } }}>
               {copied ? <Check size={13} className="text-accent-600 dark:text-accent-400" /> : <Copy size={13} />}
             </IconBtn>
             {isLastAssistant && onRegenerate && (
               <IconBtn title="Regenerate" onClick={onRegenerate}>
                 <RefreshCw size={13} />
+              </IconBtn>
+            )}
+            {isLastAssistant && message.stopReason === 'max_tokens' && onContinue && (
+              <IconBtn title="继续生成（不新增提问）" onClick={() => onContinue(message.id)}>
+                <ChevronsRight size={13} />
               </IconBtn>
             )}
             {(footerUsage ?? message.usage) && (
@@ -163,6 +185,34 @@ export const MessageItem = memo(function MessageItem({ message, streaming, resul
     </div>
   );
 });
+
+/**
+ * ‹ n/m › between variants at one position. Rendered only where the server reported siblings, which
+ * keeps a single-variant conversation completely unadorned.
+ */
+function VariantSwitcher({ message, onSwitchBranch, align }: { message: Message; onSwitchBranch?: (id: string) => void; align: 'left' | 'right' }) {
+  const variants = message.variants;
+  if (!variants || variants.total < 2) return null;
+  const go = (offset: number) => {
+    const index = (variants.index - 1 + offset + variants.total) % variants.total;
+    const target = variants.siblingIds[index];
+    if (target) onSwitchBranch?.(target);
+  };
+  const buttonCls = 'rounded p-0.5 transition-colors hover:bg-zinc-200/70 dark:hover:bg-zinc-700 disabled:opacity-40 disabled:hover:bg-transparent';
+  return (
+    <div className={cn('flex items-center gap-0.5 text-[11px] text-zinc-400 dark:text-zinc-500', align === 'right' ? 'mb-1 justify-end' : 'mt-1.5')}>
+      <button type="button" className={buttonCls} disabled={!onSwitchBranch} onClick={() => go(-1)} aria-label="上一个版本" title="上一个版本">
+        <ChevronLeft size={13} />
+      </button>
+      <span className="tabular-nums" title={`这是该位置的 ${variants.index}/${variants.total} 个版本。重新生成或编辑重发会新增版本，旧版本保留可随时切回。`}>
+        {variants.index}/{variants.total}
+      </span>
+      <button type="button" className={buttonCls} disabled={!onSwitchBranch} onClick={() => go(1)} aria-label="下一个版本" title="下一个版本">
+        <ChevronRight size={13} />
+      </button>
+    </div>
+  );
+}
 
 function IconBtn({ children, ...p }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (

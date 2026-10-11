@@ -102,6 +102,8 @@ export class OpenAIAdapter implements LLMAdapter {
     if (this.compat.maxCompletionTokens) params.max_completion_tokens = req.maxTokens;
     else params.max_tokens = req.maxTokens;
     if (req.temperature != null && this.compat.sendTemperature !== false) params.temperature = req.temperature;
+    if (req.topP != null) params.top_p = req.topP;
+    if (req.stop?.length) params.stop = req.stop;
     this.applyReasoning(params as unknown as Record<string, unknown>, req);
     if (req.tools?.length) {
       params.tools = toOpenAITools(req.tools);

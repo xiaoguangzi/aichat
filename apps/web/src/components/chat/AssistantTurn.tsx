@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import type { Message, ToolResultBlock } from '@aichat/shared';
 import { ChevronDown, ListTree, Loader2 } from 'lucide-react';
 import { sumUsage } from '../../lib/usage.js';
@@ -16,10 +16,23 @@ interface Props {
   isLastAssistant: boolean;
   onRegenerate: () => void;
   onProcessToggle: () => void;
+  /** Label of the previous turn's model, but only when this turn used a different one. */
+  modelSwitch?: string;
+  /** Show another variant at this position; absent while a reply is streaming. */
+  onSwitchBranch?: (messageId: string) => void;
+  onContinue?: (messageId: string) => void;
+}
+
+/** One line for the collapsed header: the latest bold heading (Responses style), else the live or opening line. */
+function summaryLine(text: string, streaming: boolean) {
+  const heading = [...text.matchAll(/^\s*\*\*(.+?)\*\*\s*$/gm)].at(-1)?.[1];
+  const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
+  const line = heading ?? (streaming ? lines.at(-1) : lines[0]) ?? '';
+  return line.replace(/^(#+|>|[-*+]|\d+\.)\s+/, '').replace(/[*_`]/g, '').trim();
 }
 
 /** A tool loop spans several messages, but shares one process disclosure and footer. */
-export function AssistantTurn({ messages, streamingId, running, results, isLastAssistant, onRegenerate, onProcessToggle }: Props) {
+export function AssistantTurn({ messages, streamingId, running, results, isLastAssistant, onRegenerate, onProcessToggle, modelSwitch, onSwitchBranch, onContinue }: Props) {
   const blocks = messages.flatMap((message, messageIndex) => message.content.map((block, index) => ({
     block,
     index,
@@ -38,11 +51,22 @@ export function AssistantTurn({ messages, streamingId, running, results, isLastA
     (block.type === 'text' && index < lastProcessIndex && block.text.trim()),
   );
   const answering = blocks.slice(lastProcessIndex + 1).some(({ block }) => block.type === 'text' && block.text.trim());
-  const [open, setOpen] = useState(!answering);
+  // Summarized reasoning (Anthropic / Responses) stays collapsed behind a one-line summary;
+  // raw Chat Completions reasoning keeps the process open until the answer starts.
+  const summarized = process.some(({ block }) => block.type === 'thinking' && !!(block.summarized || block.signature || block.responsesReasoning));
+  const [open, setOpen] = useState(!summarized && !answering);
   const detailsId = useId();
   useEffect(() => {
-    setOpen(!answering);
-  }, [answering]);
+    if (!summarized) setOpen(!answering);
+  }, [answering, summarized]);
+  useEffect(() => {
+    if (summarized) setOpen(false);
+  }, [summarized]);
+  const busy = running && !answering;
+  const latestThinking = summarized ? [...process].reverse().find(({ block }) => block.type === 'thinking' && block.thinking.trim())?.block : undefined;
+  const latestText = latestThinking?.type === 'thinking' ? latestThinking.thinking : '';
+  const line = useMemo(() => summaryLine(latestText, busy), [latestText, busy]);
+  const summary = summarized ? line || (busy ? '思考中…' : '思考过程') : null;
 
   const thinkingCount = process.filter(({ block }) => block.type === 'thinking').length;
   const toolCount = process.filter(({ block }) => block.type === 'tool_use').length;
@@ -64,15 +88,17 @@ export function AssistantTurn({ messages, streamingId, running, results, isLastA
             onClick={() => { onProcessToggle(); setOpen(value => !value); }}
             className="flex max-w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-zinc-500 transition-colors hover:bg-zinc-100/80 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-200 focus-visible:outline-2 focus-visible:outline-accent-500"
           >
-            {running && !answering ? <Loader2 size={14} className="shrink-0 animate-spin text-accent-500" /> : <ListTree size={14} className="shrink-0" />}
-            <span className="shrink-0 font-medium">执行过程</span>
-            <span className="min-w-0 text-left text-[11px]">{counts}</span>
+            {busy ? <Loader2 size={14} className="shrink-0 animate-spin text-accent-500" /> : <ListTree size={14} className="shrink-0" />}
+            {summary
+              ? <span className="min-w-0 truncate text-left font-medium" title={summary}>{summary}</span>
+              : <span className="shrink-0 font-medium">执行过程</span>}
+            <span className={cn('text-left text-[11px]', summary ? 'shrink-0 text-zinc-400' : 'min-w-0')}>{counts}</span>
             {failedCount > 0 && <span className="shrink-0 text-[11px] text-red-500">{failedCount} 项失败</span>}
             <ChevronDown size={13} className={cn('shrink-0 transition-transform duration-150', open && 'rotate-180')} />
           </button>
           <div id={detailsId} hidden={!open}>
             {open && process.map(({ block, key, streaming, messageId, index }) => block.type === 'thinking'
-              ? <ThinkingBlock key={key} text={block.thinking} streaming={streaming} />
+              ? <ThinkingBlock key={key} text={block.thinking} streaming={streaming} defaultOpen={summarized} />
               : block.type === 'tool_use' ? <ToolCallCard key={key} call={block} result={results[block.id]} />
                 : block.type === 'text' ? <div key={key} className="my-2.5 border-l-2 border-zinc-200 pl-3 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400 [&_.prose-chat]:text-[13px] [&_.prose-chat]:leading-6">
                   <ArtifactMessage text={block.text} live={streaming} messageId={messageId} block={index} />
@@ -101,6 +127,9 @@ export function AssistantTurn({ messages, streamingId, running, results, isLastA
             footerText={footerText}
             isLastAssistant={isLastAssistant && message.id === last.id}
             onRegenerate={onRegenerate}
+            modelSwitch={modelSwitch}
+            onSwitchBranch={onSwitchBranch}
+            onContinue={onContinue}
           />;
         })}
       </div>

@@ -58,6 +58,27 @@ function replayCost(m: LLMMessage, protocol: ProviderType): number {
  * tool loops and user/assistant prose are never compacted. Media cost is a rough weight,
  * not a tokenizer or a model context-window guarantee. */
 export function shapeOldTurns(messages: LLMMessage[], protocol: ProviderType = 'anthropic', preserveThinking = false): LLMMessage[] {
+  return shapeTurns(messages, protocol, preserveThinking, config.historyHighWaterChars, config.historyLowWaterChars);
+}
+
+/**
+ * Last-resort squeeze after the endpoint rejected a request for being over its context limit.
+ * The normal pass keeps prefixes stable to protect caching; that guarantee is deliberately given up
+ * here, because the alternative is failing the turn outright. A negative high watermark forces every
+ * complete turn before the current one through the compactor. Only tool results and thinking are
+ * cleared — user and assistant prose is never dropped, so the conversation still reads correctly.
+ */
+export function shapeTurnsForOverflow(messages: LLMMessage[]): LLMMessage[] {
+  return shapeTurns(messages, 'anthropic', false, -1, 0);
+}
+
+function shapeTurns(
+  messages: LLMMessage[],
+  protocol: ProviderType,
+  preserveThinking: boolean,
+  highWaterChars: number,
+  lowWaterChars: number,
+): LLMMessage[] {
   const out: LLMMessage[] = [];
   const turns: Array<{ start: number; end: number }> = [];
   let start = 0;
@@ -67,8 +88,8 @@ export function shapeOldTurns(messages: LLMMessage[], protocol: ProviderType = '
     if (m.role === 'user' && m.content.some(b => b.type !== 'tool_result')) {
       if (out.length > start) turns.push({ start, end: out.length });
       start = out.length;
-      if (cost > config.historyHighWaterChars) {
-        while (cost > config.historyLowWaterChars && next < turns.length) {
+      if (cost > highWaterChars) {
+        while (cost > lowWaterChars && next < turns.length) {
           const turn = turns[next++]!;
           for (let i = turn.start; i < turn.end; i++) {
             const before = out[i]!;

@@ -1,11 +1,18 @@
 import type { Conversation } from '@aichat/shared';
 import { skillRegistry } from '../skills/registry.js';
 
-export function buildSystemPrompt(conv: Conversation, opts: { hasTools: boolean }): string {
+/**
+ * `projectInstructions` come from the group the conversation lives in. They are composed here rather
+ * than copied into `systemPrompt` so that editing the project changes the standing instructions of
+ * every conversation in it, instead of only affecting the ones created afterwards.
+ */
+export function buildSystemPrompt(conv: Conversation, opts: { hasTools: boolean; projectInstructions?: string }): string {
   const parts: string[] = [];
+  const project = opts.projectInstructions?.trim();
+  if (project) parts.push(project);
   const user = conv.systemPrompt.trim();
   if (user) parts.push(user);
-  else parts.push('You are a helpful assistant. Answer in the language the user writes in. Use Markdown formatting when helpful.');
+  else if (!project) parts.push('You are a helpful assistant. Answer in the language the user writes in. Use Markdown formatting when helpful.');
   if (opts.hasTools) {
     const idx = skillRegistry.indexText(conv.settings.enabledSkills ?? 'all');
     if (idx) parts.push(idx);

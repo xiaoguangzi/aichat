@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { useSettings } from './settings.js';
 import { resolveChatModel } from '../lib/chat-model.js';
-import type { Block, ChatSSEEvent, Conversation, ConversationGroup, ConversationInput, ConversationSettings, Message, ReasoningLevel, ToolResultBlock } from '@aichat/shared';
+import type { Block, ChatSSEEvent, ContextEstimate, Conversation, ConversationGroup, ConversationInput, ConversationSettings, Message, ReasoningLevel, ToolResultBlock } from '@aichat/shared';
 import { api, ApiError } from '../api/client.js';
 import { defaultReasoning, rememberReasoning } from '../lib/reasoning';
 import { resumeChat, streamChat } from '../api/sse.js';
@@ -31,6 +31,10 @@ interface ChatState {
   approval: Approval | null;
   error: string | null;
   abort: AbortController | null;
+  /** Payload size of the last request this conversation sent; null for a draft or before load. */
+  context: ContextEstimate | null;
+  /** Set by a search hit; the message list scrolls to it on the next render and clears it. */
+  pendingJumpId: string | null;
 
   setDraftReasoning: (level: ReasoningLevel) => void;
   setDraftModelId: (modelId: string | null) => void;
@@ -54,19 +58,26 @@ interface ChatState {
   deleteConversation: (id: string) => Promise<void>;
   send: (text: string, attachmentIds?: string[]) => Promise<void>;
   regenerate: () => Promise<void>;
+  /** Keep generating from an assistant message that was cut off, without a new user turn. */
+  continueFrom: (messageId: string) => Promise<void>;
   editAndResend: (messageId: string, text: string) => Promise<void>;
   stop: () => Promise<void>;
-  resolveApproval: (ok: boolean) => Promise<void>;
+  /** Show another variant at this position (a sibling answer or an earlier question revision). */
+  switchBranch: (messageId: string) => Promise<void>;
+  /** Ask the message list to scroll to a message once it is on screen (search results). */
+  requestJump: (messageId: string) => void;
+  clearJump: () => void;
+  resolveApproval: (ok: boolean, remember?: boolean) => Promise<void>;
   clearError: () => void;
 }
 
 /** guards against out-of-order conversation fetches when switching quickly */
 let selectSeq = 0;
 
-type RunView = Pick<ChatState, 'messages' | 'streaming' | 'running' | 'pendingResults' | 'approval' | 'error' | 'abort'>;
+type RunView = Pick<ChatState, 'messages' | 'streaming' | 'running' | 'pendingResults' | 'approval' | 'error' | 'abort' | 'context'>;
 type ActiveRun = RunView & { conversation: Conversation };
 const idleView = (): Omit<RunView, 'messages'> => ({
-  streaming: null, running: false, pendingResults: {}, approval: null, error: null, abort: null,
+  streaming: null, running: false, pendingResults: {}, approval: null, error: null, abort: null, context: null,
 });
 
 // A page only displays a run; navigating away must not own or clear its lifetime.
@@ -88,7 +99,9 @@ const cacheMessages = (id: string, messages: Message[]) => {
 const sameMessages = (a: Message[], b: Message[]) => a.length === b.length && a.every((m, i) => m.id === b[i]!.id);
 
 export const useChat = create<ChatState>((set, get) => {
-  const run = async (convId: string, input?: Parameters<typeof streamChat>[1]) => {
+  const replaceConversation = (conv: Conversation) =>
+    set({ current: get().current?.id === conv.id ? conv : get().current, conversations: get().conversations.map((c) => (c.id === conv.id ? conv : c)) });
+  const run =async (convId: string, input?: Parameters<typeof streamChat>[1]) => {
     const ac = new AbortController();
     const state: ActiveRun = {
       ...idleView(), conversation: get().current!, messages: get().messages,
@@ -113,6 +126,13 @@ export const useChat = create<ChatState>((set, get) => {
     const handle = (ev: ChatSSEEvent) => {
       const s = get();
       switch (ev.event) {
+        case 'routing': {
+          const conversation = ev.data.conversation;
+          if (conversation.id !== convId) break;
+          state.conversation = conversation;
+          replaceConversation(conversation);
+          break;
+        }
         case 'snapshot': {
           if (flushTimer != null) window.cancelAnimationFrame(flushTimer);
           flushTimer = null;
@@ -120,7 +140,7 @@ export const useChat = create<ChatState>((set, get) => {
           if (conversation.id !== convId) break;
           state.conversation = conversation;
           pendingStreaming = view.streaming;
-          publish(view);
+          publish({ ...view, context: view.context ?? null });
           cacheMessages(convId, view.messages);
           if (get().current?.id === convId) set({ current: conversation });
           break;
@@ -143,8 +163,10 @@ export const useChat = create<ChatState>((set, get) => {
         case 'thinking_delta': {
           if (!pendingStreaming) break;
           const last = pendingStreaming.content[pendingStreaming.content.length - 1];
-          if (last && last.type === 'thinking') last.thinking += ev.data.text;
-          else pendingStreaming.content.push({ type: 'thinking', thinking: ev.data.text });
+          if (last && last.type === 'thinking') {
+            last.thinking += ev.data.text;
+            if (ev.data.summarized) last.summarized = true;
+          } else pendingStreaming.content.push({ type: 'thinking', thinking: ev.data.text, ...(ev.data.summarized && { summarized: true }) });
           scheduleFlush();
           break;
         }
@@ -224,11 +246,11 @@ export const useChat = create<ChatState>((set, get) => {
       // Refresh the owning conversation even when it finished offscreen. Never let
       // an older run's refresh replace a newer reply or another conversation's view.
       try {
-        const { messages, running: _running, ...conv } = await api.conversations.get(convId);
+        const { messages, running: _running, context, ...conv } = await api.conversations.get(convId);
         if (runs.get(convId) === state) {
           state.conversation = conv;
           cacheMessages(convId, messages);
-          publish({ messages, pendingResults: {} });
+          publish({ messages, pendingResults: {}, context: context ?? null });
           if (get().current?.id === convId) set({ current: conv });
         }
       } catch {
@@ -256,6 +278,20 @@ export const useChat = create<ChatState>((set, get) => {
     approval: null,
     error: null,
     abort: null,
+    context: null,
+    pendingJumpId: null,
+
+    requestJump: (messageId: string) => set({ pendingJumpId: messageId }),
+    clearJump: () => set({ pendingJumpId: null }),
+
+    switchBranch: async (messageId: string) => {
+      const conv = get().current;
+      if (!conv || runs.has(conv.id)) return;
+      const updated = await api.conversations.branch(conv.id, messageId);
+      const { messages, ...rest } = updated;
+      cacheMessages(conv.id, messages);
+      set({ current: { ...conv, ...rest }, messages, error: null });
+    },
 
     setDraftReasoning: (level: ReasoningLevel) => {
       rememberReasoning(level);
@@ -342,7 +378,7 @@ export const useChat = create<ChatState>((set, get) => {
       }
       const cached = msgCache.get(id);
       if (known && cached) set({ current: known, messages: cached, ...idleView() });
-      let full: Conversation & { messages: Message[]; running?: boolean };
+      let full: Conversation & { messages: Message[]; running?: boolean; context?: ContextEstimate | null };
       try {
         full = await api.conversations.get(id);
       } catch (e) {
@@ -356,7 +392,7 @@ export const useChat = create<ChatState>((set, get) => {
       }
       // a newer selection (or clearing) happened while we were fetching — drop this one
       if (seq !== selectSeq) return;
-      const { messages: fetchedMessages, running: serverRunning, ...conv } = full;
+      const { messages: fetchedMessages, running: serverRunning, context: fetchedContext, ...conv } = full;
       const live = runs.get(id);
       if (live) {
         set({ current: get().conversations.find((c) => c.id === id) ?? live.conversation, ...runView(live) });
@@ -370,10 +406,12 @@ export const useChat = create<ChatState>((set, get) => {
       // already showing exactly this — avoid a second commit that would re-render every message
       if (s.current?.id === id && sameMessages(s.messages, messages)) {
         if (JSON.stringify(s.current) !== JSON.stringify(conv)) set({ current: conv });
+        // The meter is derived, not part of the message list, so refresh it on every revalidation.
+        if (s.context !== (fetchedContext ?? null)) set({ context: fetchedContext ?? null });
         if (serverRunning) void run(id);
         return;
       }
-      set({ current: conv, messages, ...idleView() });
+      set({ current: conv, messages, ...idleView(), context: fetchedContext ?? null });
       if (serverRunning) void run(id);
     },
     newDraft: (groupId) => {
@@ -411,8 +449,7 @@ export const useChat = create<ChatState>((set, get) => {
       return conv;
     },
     updateConversation: async (id, input) => {
-      const conv = await api.conversations.update(id, input);
-      set({ current: get().current?.id === id ? conv : get().current, conversations: get().conversations.map((c) => (c.id === id ? conv : c)) });
+      replaceConversation(await api.conversations.update(id, input));
     },
     deleteConversation: async (id) => {
       await api.conversations.remove(id);
@@ -436,6 +473,13 @@ export const useChat = create<ChatState>((set, get) => {
       set({ messages: [...get().messages, optimistic] });
       await run(conv.id, { text, attachmentIds });
     },
+    continueFrom: async (messageId: string) => {
+      const conv = get().current;
+      if (!conv || runs.get(conv.id)) return;
+      set({ error: null });
+      await run(conv.id, { text: '', continueFromId: messageId });
+    },
+
     regenerate: async () => {
       const conv = get().current;
       if (!conv || runs.get(conv.id)?.running) return;
@@ -470,13 +514,13 @@ export const useChat = create<ChatState>((set, get) => {
         if (get().current?.id === conv.id) set({ error });
       }
     },
-    resolveApproval: async (ok) => {
+    resolveApproval: async (ok, remember = false) => {
       const a = get().approval;
       if (!a) return;
       const active = runs.get(get().current?.id ?? '');
       if (active) active.approval = null;
       set({ approval: null });
-      await api.approvals.resolve(a.requestId, ok).catch(() => {});
+      await api.approvals.resolve(a.requestId, ok, remember).catch(() => {});
     },
     clearError: () => {
       const active = runs.get(get().current?.id ?? '');

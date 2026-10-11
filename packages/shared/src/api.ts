@@ -1,7 +1,77 @@
 import { z } from 'zod';
 
-export const appSettingsSchema = z.object({ titleModelId: z.string().min(1).nullable() }).strict();
+/**
+ * Request-log retention. Every limit is optional; `null` means "use the built-in default"
+ * (kept in DEFAULT_TRACE_RETENTION so old rows and the UI agree on one number).
+ */
+export const traceRetentionSchema = z.object({
+  autoPrune: z.boolean().optional(),
+  maxCount: z.number().int().min(0).nullable().optional(),
+  maxTotalBytes: z.number().int().min(0).nullable().optional(),
+  maxAgeDays: z.number().int().min(0).nullable().optional(),
+  /** Reclaim free pages after a manual cleanup. Auto-prune never vacuums. */
+  vacuumOnPrune: z.boolean().optional(),
+}).strict();
+export type TraceRetentionInput = z.infer<typeof traceRetentionSchema>;
+
+export const appSettingsSchema = z.object({
+  titleModelId: z.string().min(1).nullable(),
+  traceRetention: traceRetentionSchema.optional(),
+}).strict();
 export type AppSettings = z.infer<typeof appSettingsSchema>;
+
+/** Effective retention (defaults resolved) plus what the log currently costs on disk. */
+export interface TraceRetention {
+  autoPrune: boolean;
+  maxCount: number;
+  maxTotalBytes: number;
+  maxAgeDays: number;
+  vacuumOnPrune: boolean;
+}
+
+/**
+ * Used when a limit is null and as the ceiling for the insert-time guard, so a single
+ * oversized generation cannot bloat the database before the next prune runs.
+ */
+export const DEFAULT_TRACE_RETENTION: TraceRetention = {
+  autoPrune: true,
+  maxCount: 500,
+  maxTotalBytes: 128 * 1024 * 1024,
+  maxAgeDays: 30,
+  vacuumOnPrune: false,
+};
+
+export interface StorageStats {
+  retention: TraceRetention;
+  /**
+   * Exactly what is persisted, with unset limits still null. The UI seeds its form from this so
+   * saving an untouched box keeps it on the built-in default instead of freezing today's number.
+   */
+  retentionInput: TraceRetentionInput;
+  traces: { count: number; bytes: number; conversations: number };
+  db: { pageCount: number; pageSize: number; freePages: number; bytes: number; reclaimableBytes: number };
+  /** Uploaded files on disk; `orphaned` are not referenced by any message any more. */
+  uploads: { count: number; bytes: number; orphaned: number; orphanedBytes: number };
+  /** Local originals kept for context__read_result. */
+  toolResults: { count: number; bytes: number };
+  messages: { count: number; bytes: number };
+}
+
+export interface BackupInfo {
+  name: string;
+  bytes: number;
+  createdAt: string;
+}
+
+export interface PruneResult {
+  deleted: number;
+  remaining: number;
+  bytesFreed: number;
+  vacuumed: boolean;
+  reclaimedBytes: number;
+  /** Conversations currently generating are never pruned. */
+  protectedConversations: number;
+}
 
 // TypeSafe System One is deliberately separate from chat providers and settings.
 const jevEntrySchema = z.union([z.string(), z.record(z.string(), z.json()), z.array(z.json()), z.null()]);
@@ -26,6 +96,27 @@ export const jevSettingsSchema = z.object({
 export type JevSettingsInput = z.infer<typeof jevSettingsSchema>;
 
 export const reasoningLevelSchema = z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']);
+export const jevRoutingProfileSchema = z.object({
+  id: z.string().min(1).max(80),
+  modelId: z.string().min(1),
+  name: z.string().trim().min(1).max(100),
+  speed: z.number().int().min(1).max(5),
+  intelligence: z.number().int().min(1).max(5),
+  reasoning: reasoningLevelSchema,
+  description: z.string().max(2000),
+}).strict();
+export const jevRoutingSettingsSchema = z.object({
+  enabled: z.boolean(),
+  instructions: z.string().trim().min(1).max(4000),
+  minConfidence: z.number().min(0).max(1),
+  fallbackProfileId: z.string().max(80),
+  profiles: z.array(jevRoutingProfileSchema).max(32),
+}).strict().superRefine((v, ctx) => {
+  if (new Set(v.profiles.map(p => p.id)).size !== v.profiles.length) ctx.addIssue({ code: 'custom', path: ['profiles'], message: '候选项 ID 不能重复' });
+  if (v.enabled && (!v.profiles.length || !v.profiles.some(p => p.id === v.fallbackProfileId))) ctx.addIssue({ code: 'custom', path: ['fallbackProfileId'], message: '启用前请添加候选项并指定兜底项' });
+});
+export type JevRoutingSettings = z.infer<typeof jevRoutingSettingsSchema>;
+export type JevRoutingProfile = z.infer<typeof jevRoutingProfileSchema>;
 /** Partial<Record<ReasoningLevel, string | null>>: level → endpoint literal; null = unsupported level */
 export const reasoningMapSchema = z.partialRecord(reasoningLevelSchema, z.string().nullable());
 
@@ -61,6 +152,8 @@ export const modelInputSchema = z.object({
     .partial()
     .optional(),
   maxOutput: z.number().int().positive().nullable().optional(),
+  /** Declared token window for the occupancy ratio; null clears it. */
+  contextWindow: z.number().int().positive().nullable().optional(),
   adaptive: z.boolean().nullable().optional(),
   reasoningMap: reasoningMapSchema.nullable().optional(),
   isDefault: z.boolean().optional(),
@@ -68,8 +161,12 @@ export const modelInputSchema = z.object({
 export type ModelInput = z.infer<typeof modelInputSchema>;
 
 export const conversationSettingsSchema = z.object({
+  autoRoute: z.boolean().optional(),
   temperature: z.number().min(0).max(2).nullable().optional(),
   maxTokens: z.number().int().positive().nullable().optional(),
+  topP: z.number().gt(0).max(1).nullable().optional(),
+  /** Anthropic and OpenAI both cap stop sequences at 4. */
+  stop: z.array(z.string().min(1)).max(4).nullable().optional(),
   enabledMcpServers: z.union([z.literal('all'), z.array(z.string())]).optional(),
   enabledSkills: z.union([z.literal('all'), z.array(z.string())]).optional(),
   reasoning: reasoningLevelSchema.nullable().optional(),
@@ -81,6 +178,7 @@ export const conversationInputSchema = z.object({
   modelId: z.string().nullable().optional(),
   /** null moves the conversation out of its group; undefined leaves it where it is */
   groupId: z.string().nullable().optional(),
+  pinned: z.boolean().optional(),
   systemPrompt: z.string().optional(),
   settings: conversationSettingsSchema.optional(),
 });
@@ -89,6 +187,13 @@ export type ConversationInput = z.infer<typeof conversationInputSchema>;
 export const groupInputSchema = z.object({
   name: z.string().min(1).max(100),
   collapsed: z.boolean().optional(),
+  instructions: z.string().max(20_000).optional(),
+  modelId: z.string().min(1).nullable().optional(),
+  /**
+   * Project defaults for new conversations. `null` clears a single field (same convention as
+   * conversation settings); omitted fields are left alone.
+   */
+  settings: conversationSettingsSchema.optional(),
 });
 export type GroupInput = z.infer<typeof groupInputSchema>;
 
@@ -97,6 +202,36 @@ export type GroupPatch = z.infer<typeof groupPatchSchema>;
 
 export const groupReorderSchema = z.object({ ids: z.array(z.string()) });
 
+/** Filters for message-level search; every field is optional. */
+export const searchQuerySchema = z.object({
+  q: z.string().trim().min(1).max(200),
+  conversationId: z.string().min(1).optional(),
+  groupId: z.string().min(1).optional(),
+  role: z.enum(['user', 'assistant']).optional(),
+  /** ISO date; only messages created at or after it. */
+  since: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+}).strict();
+export type SearchOptions = Omit<z.infer<typeof searchQuerySchema>, 'q'>;
+
+/** One message-level search result. */
+export interface SearchHit {
+  messageId: string;
+  conversationId: string;
+  conversationTitle: string;
+  role: 'user' | 'assistant';
+  seq: number;
+  createdAt: string;
+  /** Text around the match, for the result list. */
+  snippet: string;
+  /** False when the match sits on a superseded version and jumping to it would show nothing new. */
+  visible: boolean;
+}
+
+/** Switch the viewed variant at one position; the server derives the full path. */
+export const switchBranchSchema = z.object({ messageId: z.string().min(1) }).strict();
+export type SwitchBranchInput = z.infer<typeof switchBranchSchema>;
+
 export const sendMessageSchema = z.object({
   text: z.string(),
   attachmentIds: z.array(z.string()).optional(),
@@ -104,8 +239,19 @@ export const sendMessageSchema = z.object({
   regenerate: z.boolean().optional(),
   /** edit: replace user message with this id (and drop everything after it) */
   editMessageId: z.string().optional(),
+  /**
+   * continue: answer again from this assistant message without adding a user turn. Used when a
+   * reply was cut off (length limit or a stop) and the model should just keep going.
+   */
+  continueFromId: z.string().optional(),
 });
 export type SendMessageInput = z.infer<typeof sendMessageSchema>;
+
+export const approvalDecisionSchema = z.object({
+  approve: z.boolean(),
+  /** Write this answer down as a standing rule for the same tool. */
+  remember: z.boolean().optional(),
+}).strict();
 
 export const mcpServerInputSchema = z.object({
   name: z

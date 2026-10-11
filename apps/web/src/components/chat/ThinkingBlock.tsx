@@ -3,12 +3,13 @@ import { Brain, ChevronDown } from 'lucide-react';
 import { Markdown } from '../ui/Markdown';
 import { cn } from '../../lib/utils';
 
-export function ThinkingBlock({ text, streaming }: { text: string; streaming: boolean }) {
-  const [open, setOpen] = useState(streaming);
+/** `defaultOpen` keeps short summaries readable once their collapsed process is expanded. */
+export function ThinkingBlock({ text, streaming, defaultOpen = false }: { text: string; streaming: boolean; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(streaming || defaultOpen);
 
   useEffect(() => {
-    if (!streaming) setOpen(false);
-  }, [streaming]);
+    if (!streaming && !defaultOpen) setOpen(false);
+  }, [streaming, defaultOpen]);
 
   if (!text.trim() && !streaming) return null;
 

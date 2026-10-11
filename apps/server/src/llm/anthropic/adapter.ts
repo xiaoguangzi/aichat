@@ -80,6 +80,9 @@ export class AnthropicAdapter implements LLMAdapter {
         params.thinking = { type: 'disabled' } as Anthropic.ThinkingConfigParam;
       }
       if (req.temperature != null) params.temperature = req.temperature;
+      // Anthropic takes top_p as a number and stop_sequences as a string array.
+      if (req.topP != null) params.top_p = req.topP;
+      if (req.stop?.length) params.stop_sequences = req.stop;
     } else {
       // Thinking on. Two ways to say it: {type:"adaptive"} on the official API, {type:"enabled"}
       // on gateways fronting other vendors (GLM & co). budget_tokens is not sent at all — current
@@ -123,7 +126,7 @@ export class AnthropicAdapter implements LLMAdapter {
             break;
           case 'content_block_delta':
             if (ev.delta.type === 'text_delta') yield { type: 'text_delta', text: ev.delta.text };
-            else if (ev.delta.type === 'thinking_delta') yield { type: 'thinking_delta', text: ev.delta.thinking };
+            else if (ev.delta.type === 'thinking_delta') yield { type: 'thinking_delta', text: ev.delta.thinking, summarized: true };
             else if (ev.delta.type === 'signature_delta') yield { type: 'thinking_delta', text: '', signature: ev.delta.signature };
             else if (ev.delta.type === 'input_json_delta') {
               const t = toolArgs.get(ev.index);

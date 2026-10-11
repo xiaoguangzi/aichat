@@ -35,14 +35,15 @@ export function Select({ className, ...p }: SelectHTMLAttributes<HTMLSelectEleme
   );
 }
 
-export function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label?: string }) {
+export function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label?: string; disabled?: boolean }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
-      className="group inline-flex items-center gap-2.5 text-xs select-none"
+      className="group inline-flex items-center gap-2.5 text-xs select-none disabled:opacity-50 disabled:pointer-events-none"
     >
       <span
         className={cn(

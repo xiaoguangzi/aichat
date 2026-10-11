@@ -12,7 +12,7 @@ let root: Root;
 const loadProviders = useSettings.getState().loadProviders;
 beforeEach(() => {
   host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host);
-  useSettings.setState({ loadProviders: async () => {}, providers: [{ id: 'p', name: 'Affordable', type: 'openai', baseUrl: 'http://x', apiKeyMasked: '', hasApiKey: false, extraHeaders: {}, compat: {}, createdAt: '', models: [{ id: 'cheap', modelId: 'cheap-model', displayName: 'Cheap title model', providerId: 'p', caps: { tools: false, thinking: false, image: false, pdf: false }, maxOutput: null, adaptive: false, reasoningMap: null, isDefault: false }] }] });
+  useSettings.setState({ loadProviders: async () => {}, providers: [{ id: 'p', name: 'Affordable', type: 'openai', baseUrl: 'http://x', apiKeyMasked: '', hasApiKey: false, extraHeaders: {}, compat: {}, createdAt: '', models: [{ id: 'cheap', modelId: 'cheap-model', displayName: 'Cheap title model', providerId: 'p', caps: { tools: false, thinking: false, image: false, pdf: false }, maxOutput: null, contextWindow: null, adaptive: false, reasoningMap: null, isDefault: false }] }] });
   vi.spyOn(api.settings, 'get').mockResolvedValue({ titleModelId: null });
 });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); useSettings.setState({ loadProviders, providers: [] }); vi.restoreAllMocks(); });

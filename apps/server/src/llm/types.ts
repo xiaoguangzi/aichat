@@ -17,6 +17,8 @@ export interface LLMRequest {
   tools?: ToolDef[];
   maxTokens: number;
   temperature?: number | null;
+  topP?: number | null;
+  stop?: string[] | null;
   /**
    * Unified reasoning dial; each adapter translates it for its protocol/dialect. Always a
    * concrete level — resolveReasoningLevel() picks it, and 'off' is what a model that cannot

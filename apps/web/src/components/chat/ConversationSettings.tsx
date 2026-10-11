@@ -36,11 +36,16 @@ export function ConversationSettingsPanel({ onClose }: { onClose: () => void }) 
   };
 
   const handleSave = async () => {
+    // Send only the fields this panel edits, so settings owned elsewhere (effort, auto-routing) are never replayed from the snapshot.
+    const edited: CS = {
+      temperature: s.temperature, maxTokens: s.maxTokens, topP: s.topP, stop: s.stop,
+      enabledMcpServers: s.enabledMcpServers, enabledSkills: s.enabledSkills,
+    };
     if (current) {
-      await updateConversation(current.id, { systemPrompt: system, settings: s });
+      await updateConversation(current.id, { systemPrompt: system, settings: edited });
     } else {
       setDraftSystemPrompt(system);
-      setDraftSettings(s);
+      setDraftSettings({ ...draftSettings, ...edited });
     }
     onClose();
   };
@@ -78,6 +83,32 @@ export function ConversationSettingsPanel({ onClose }: { onClose: () => void }) 
             placeholder="Custom instructions for the assistant…"
           />
         </Field>
+
+        <div className="grid grid-cols-2 gap-2.5">
+          <Field label="Top P" hint="0 < p ≤ 1（留空用接口默认）">
+            <Input
+              aria-label="Top P"
+              type="number"
+              step="0.05"
+              min="0.01"
+              max="1"
+              value={s.topP ?? ''}
+              onChange={(e) => setS({ ...s, topP: e.target.value === '' ? null : Number(e.target.value) })}
+              placeholder="默认"
+            />
+          </Field>
+          <Field label="Stop 序列" hint="逗号分隔，最多 4 个">
+            <Input
+              aria-label="Stop 序列"
+              value={(s.stop ?? []).join(', ')}
+              onChange={(e) => {
+                const list = e.target.value.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 4);
+                setS({ ...s, stop: list.length ? list : null });
+              }}
+              placeholder="留空不发送"
+            />
+          </Field>
+        </div>
 
         <div className="grid grid-cols-2 gap-2.5">
           <Field label="Temperature" hint="0.0 - 2.0 (empty = default)">

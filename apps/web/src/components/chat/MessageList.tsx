@@ -21,6 +21,8 @@ export function MessageList() {
   const currentId = useChat((s) => s.current?.id);
   const regenerate = useChat((s) => s.regenerate);
   const editAndResend = useChat((s) => s.editAndResend);
+  const switchBranch = useChat((s) => s.switchBranch);
+  const continueFrom = useChat((s) => s.continueFrom);
   const skills = useSettings((s) => s.skills);
   const ref = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -57,6 +59,8 @@ export function MessageList() {
   }, [visible, liveStreaming]);
 
   const onRegenerate = useCallback(() => void regenerate(), [regenerate]);
+  const onSwitchBranch = useCallback((messageId: string) => void switchBranch(messageId), [switchBranch]);
+  const onContinue = useCallback((messageId: string) => void continueFrom(messageId), [continueFrom]);
   const onEdit = useCallback((messageId: string, text: string) => void editAndResend(messageId, text), [editAndResend]);
   // Expanding the process is an explicit reading action. Its height change must
   // not pin the list to the bottom and move the newly opened cards out of view.
@@ -142,6 +146,40 @@ export function MessageList() {
   }, [budget, groups.length, currentId]);
 
   const rendered = budget >= groups.length ? groups : groups.slice(groups.length - budget);
+  // Turns whose model differs from the previous assistant turn, and what that previous model was.
+  // Computed up front so the footer can name the model exactly where a switch happened; repeating
+  // it on every reply would just be noise.
+  const modelSwitches = useMemo(() => {
+    const switching = new Set<string>();
+    const previousLabel = new Map<string, string>();
+    let lastLabel: string | null = null;
+    for (const turn of groups) {
+      const first = turn[0]!;
+      if (first.role !== 'assistant') continue;
+      const label = turn.at(-1)!.model?.label ?? null;
+      if (lastLabel && label && lastLabel !== label) {
+        switching.add(first.id);
+        previousLabel.set(first.id, lastLabel);
+      }
+      lastLabel = label;
+    }
+    return { switching, previousLabel };
+  }, [groups]);
+
+  // A search hit asks for a message that may not be mounted yet (the list mounts a tail first), so
+  // the jump runs after render and only when the target is actually present.
+  const pendingJumpId = useChat((s) => s.pendingJumpId);
+  const clearJump = useChat((s) => s.clearJump);
+  useLayoutEffect(() => {
+    if (!pendingJumpId || !anchors.current.has(pendingJumpId)) return;
+    clearJump();
+    flushSync(() => setBudget(Number.MAX_SAFE_INTEGER));
+    const target = anchors.current.get(pendingJumpId);
+    if (target) {
+      target.scrollIntoView({ block: 'center', behavior: 'instant' });
+      stick.current = false;
+    }
+  }, [pendingJumpId, clearJump, rendered]);
 
   const jumpToMessage = useCallback((id: string) => {
     stick.current = false;
@@ -213,7 +251,10 @@ export function MessageList() {
                   isLastAssistant={last.id === lastAssistantId && !running}
                   onRegenerate={onRegenerate}
                   onProcessToggle={onProcessToggle}
-                /> : <MessageItem message={first} results={results} onEdit={!running ? onEdit : undefined} />}
+                  modelSwitch={modelSwitches.switching.has(first.id) ? modelSwitches.previousLabel.get(first.id) : undefined}
+                  onSwitchBranch={!running ? onSwitchBranch : undefined}
+                  onContinue={!running ? onContinue : undefined}
+                /> : <MessageItem message={first} results={results} onEdit={!running ? onEdit : undefined} onSwitchBranch={!running ? onSwitchBranch : undefined} />}
               </div>
             );
           })}

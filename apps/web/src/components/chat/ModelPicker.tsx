@@ -16,7 +16,8 @@ export function ModelPicker() {
   const [open, setOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  const currentModel = resolveChatModel(models, current?.modelId ?? draftModelId);
+  const locked = !!current?.routing;
+  const currentModel = locked ? models.find(m => m.id === current?.modelId) : resolveChatModel(models, current?.modelId ?? draftModelId);
   const selectedModelId = currentModel?.id ?? '';
 
   useEffect(() => {
@@ -51,7 +52,8 @@ export function ModelPicker() {
       {/* Modern pill button for model selection */}
       <button
         type="button"
-        disabled={running || !models.length}
+        disabled={running || !models.length || locked}
+        title={locked ? 'Jev 已固定此会话的模型；更改请新建会话' : undefined}
         onClick={() => setOpen((prev) => !prev)}
         className={cn(
           'group inline-flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs font-medium transition-all duration-150',
@@ -75,7 +77,7 @@ export function ModelPicker() {
               </span>
             </>
           ) : (
-            <span className="text-zinc-400">No models configured</span>
+            <span className="text-zinc-400">{current?.routing ? `${current.routing.modelName}（已不可用）` : 'No models configured'}</span>
           )}
         </div>
         <ChevronDown
@@ -156,7 +158,7 @@ export function ModelPicker() {
       {/* Semantic hidden select for tests & accessibility */}
       <select
         value={selectedModelId}
-        disabled={running}
+        disabled={running || locked}
         tabIndex={-1}
         aria-hidden="true"
         onChange={(e) => void selectModel(e.target.value)}
