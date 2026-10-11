@@ -1,5 +1,6 @@
 import type { Conversation } from '@aichat/shared';
 import { skillRegistry } from '../skills/registry.js';
+import { intelligentUiPrompt } from './intelligentUiPrompt.js';
 
 /**
  * `projectInstructions` come from the group the conversation lives in. They are composed here rather
@@ -21,6 +22,7 @@ export function buildSystemPrompt(conv: Conversation, opts: { hasTools: boolean;
   // the web client renders Markdown with KaTeX, so math belongs in LaTeX rather than in a code block
   parts.push('Formatting: math renders with KaTeX — write formulas as LaTeX ($...$ inline, $$...$$ on their own lines), not as ASCII inside a code block.');
   parts.push('Artifacts: For substantial self-contained deliverables (websites, interactive apps, SVG graphics, Mermaid diagrams, documents or reusable code), emit a fenced code block with metadata: ```html artifact id="stable-slug" title="Short title". Supported languages: html, jsx, tsx, svg, markdown, mermaid, or other code languages. Reuse the same id when revising an existing artifact and output its complete updated source, never a diff or placeholder. Use a fence longer than any fences inside the content. Ordinary explanations and short snippets should remain normal Markdown. HTML should be standalone with inline CSS/JS. React must default-export a component; available imports: react, react-dom/client, lucide-react, recharts. Use plain CSS or inline styles (no Tailwind runtime, npm installs, remote imports, backend APIs or local storage). Previews run in an isolated sandbox without network access for fetch or external assets. Keep explanatory text outside the artifact fence.');
+  parts.push(intelligentUiPrompt);
   parts.push(`Current date: ${new Date().toISOString().slice(0, 10)}`);
   return parts.join('\n\n');
 }

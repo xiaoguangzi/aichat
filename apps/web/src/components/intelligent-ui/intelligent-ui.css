@@ -1,0 +1,63 @@
+.intelligent-ui { margin: 18px 0; border: 1px solid var(--chat-line, #e4e4e7); border-radius: 20px; overflow: hidden; background: #fff; color: #27272a; font-size: 14px; line-height: 1.6; }
+.dark .intelligent-ui { background: #18181b; color: #e4e4e7; }
+.iui-header { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--chat-line, #e4e4e7); }
+.iui-badge { display: flex; align-items: center; gap: 6px; color: var(--color-accent-600, #3985df); font-size: 11px; font-weight: 600; }
+.dark .iui-badge { color: var(--color-accent-400, #93c5fd); }
+.iui-status { margin-left: auto; font-size: 11px; color: #71717a; }
+.iui-header button { padding: 5px; border-radius: 6px; color: #71717a; }
+.iui-heading { padding: 20px 20px 0; }
+.iui-heading h3 { font-size: 21px; line-height: 1.35; font-weight: 650; letter-spacing: -.03em; overflow-wrap: anywhere; }
+.iui-heading p { margin-top: 6px; color: #71717a; font-size: 13px; white-space: pre-wrap; }
+.dark .iui-heading p, .dark .iui-status { color: #a1a1aa; }
+.iui-body { padding: 20px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.iui-node { grid-column: 1 / -1; min-width: 0; }
+.iui-node-metric { grid-column: auto; }
+.iui-metrics { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr)); gap: 12px; }
+.iui-metrics > :last-child:nth-child(odd) { grid-column: auto; }
+.iui-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.iui-control { display: block; }
+.iui-control > span { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; font-weight: 500; }
+.iui-control output { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--color-accent-600, #3985df); }
+.dark .iui-control output { color: var(--color-accent-400, #93c5fd); }
+.iui-control > small { display: flex; justify-content: space-between; color: #71717a; font-size: 11px; }
+.iui-control input[type=range] { width: 100%; accent-color: var(--color-accent-500, #3985df); cursor: pointer; min-height: 28px; }
+.iui-control input[type=number], .iui-control select { width: 100%; min-height: 42px; border: 1px solid var(--chat-line, #e4e4e7); border-radius: 10px; padding: 8px 12px; background: transparent; color: inherit; font: inherit; }
+.dark .iui-control select option { background: #18181b; }
+.intelligent-ui :is(input, select, button, summary):focus-visible { outline: 2px solid var(--color-accent-500, #3985df); outline-offset: 3px; }
+.iui-choice legend { font-weight: 500; margin-bottom: 9px; }
+.iui-choice > div, .iui-diagram-nodes { display: flex; flex-wrap: wrap; gap: 7px; }
+.iui-choice button, .iui-diagram-nodes button { border: 1px solid var(--chat-line, #e4e4e7); border-radius: 10px; padding: 8px 14px; min-height: 42px; transition: background .15s; }
+.iui-choice button[aria-pressed=true], .iui-diagram-nodes button[aria-pressed=true] { color: #173f7f; background: #eaf3fd; border-color: #bfdbfe; }
+.dark :is(.iui-choice, .iui-diagram-nodes) button[aria-pressed=true] { background: #132748; color: #bfdbfe; border-color: #1b457a; }
+.iui-metric { border: 1px solid var(--chat-line, #e4e4e7); border-radius: 14px; padding: 16px; height: 100%; background: #fafafa; }
+.dark .iui-metric { background: #202024; }
+.iui-metric > span { color: #71717a; font-size: 12px; }
+.dark .iui-metric > span { color: #a1a1aa; }
+.iui-metric output { display: block; margin-top: 4px; font-size: clamp(20px, 3cqw, 30px); font-weight: 600; letter-spacing: -.04em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.iui-metric small { margin-left: 6px; font-size: 13px; font-weight: 400; letter-spacing: 0; }
+.iui-metric p { margin-top: 8px; font-size: 12px; color: #71717a; }
+.iui-check { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; min-height: 32px; }
+.iui-check input { margin-top: 5px; width: 17px; height: 17px; accent-color: var(--color-accent-500, #3985df); }
+.iui-check strong { font-weight: 500; }.iui-check small { display: block; color: #71717a; }
+.iui-check input:checked + span strong { text-decoration: line-through; color: #71717a; }
+.iui-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 12px; }
+.iui-cards article { padding: 16px; border: 1px solid var(--chat-line, #e4e4e7); border-radius: 14px; }
+.iui-cards h4, .iui-diagram h4 { font-weight: 600; margin-bottom: 8px; }.iui-cards p { white-space: pre-wrap; overflow-wrap: anywhere; color: #71717a; }
+.dark .iui-cards p { color: #a1a1aa; }
+.iui-table-scroll { max-width: 100%; overflow-x: auto; border: 1px solid var(--chat-line, #e4e4e7); border-radius: 12px; }
+.intelligent-ui table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; }
+.intelligent-ui :is(td, th) { padding: 10px 14px; border-bottom: 1px solid var(--chat-line, #e4e4e7); min-width: 90px; }
+.intelligent-ui th { font-weight: 600; background: #fafafa; }.dark .intelligent-ui th { background: #202024; }.intelligent-ui tr:last-child td { border-bottom: 0; }
+.iui-chart figcaption { font-weight: 500; margin-bottom: 8px; }.iui-chart svg { width: 100%; touch-action: pan-y; }
+.iui-chart svg text { fill: #71717a; font-size: 12px; }.dark .iui-chart svg text { fill: #a1a1aa; }
+.iui-gridline { stroke: var(--chat-line, #e4e4e7); }.iui-probe { stroke: #a1a1aa; stroke-dasharray: 3 4; }
+.iui-chart-labels { display: flex; justify-content: space-between; font-size: 11px; color: #71717a; }.iui-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; margin-top: 8px; }
+.iui-legend > span { display: inline-flex; align-items: center; gap: 5px; }.iui-legend i { width: 8px; height: 8px; border-radius: 50%; }
+.iui-chart-data { margin-top: 10px; }.iui-chart-data summary { font-size: 11px; color: #71717a; cursor: pointer; }.iui-chart-data .iui-table-scroll { margin-top: 8px; }
+.iui-connections { display: flex; flex-direction: column; gap: 5px; margin-top: 14px; }.iui-connections li { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; font-size: 12px; }.iui-connections small { color: #71717a; }
+.iui-diagram-detail { margin-top: 12px; padding: 14px; border-radius: 12px; background: #fafafa; font-size: 13px; }.dark .iui-diagram-detail { background: #202024; }.iui-diagram-detail p { white-space: pre-wrap; }
+.iui-action { display: inline-flex; align-items: center; gap: 10px; border: 1px solid var(--chat-line, #e4e4e7); border-radius: 10px; padding: 9px 14px; font-weight: 500; min-height: 42px; }.iui-action:hover:enabled { background: #fafafa; }.dark .iui-action:hover:enabled { background: #27272a; }.iui-action:disabled { opacity: .45; cursor: not-allowed; }
+.iui-waiting, .iui-error { margin: 0 20px 16px; font-size: 12px; color: #71717a; }.iui-error { color: #b45309; }.dark .iui-error { color: #fbbf24; }
+.iui-source { border-top: 1px solid var(--chat-line, #e4e4e7); font-size: 11px; color: #71717a; }.iui-source summary { display: flex; align-items: center; gap: 7px; padding: 10px 20px; cursor: pointer; }.iui-source pre { padding: 16px 20px; overflow: auto; max-height: 300px; white-space: pre; font-size: 11px; }
+.dark .intelligent-ui :is(.iui-control small, .iui-metric p, .iui-check small, .iui-connections small, .iui-chart-labels, .iui-chart-data summary, .iui-source, .iui-waiting) { color: #a1a1aa; }
+@media (max-width: 480px) { .iui-body { padding: 16px; gap: 14px; }.iui-heading { padding: 16px 16px 0; }.iui-header { padding: 10px 16px; }.iui-metric { padding: 12px; }.iui-heading h3 { font-size: 19px; }.iui-metrics > :last-child:nth-child(odd) { grid-column: 1 / -1; } }

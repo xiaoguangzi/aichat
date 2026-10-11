@@ -1,18 +1,27 @@
 import { useMemo } from 'react';
-import { parseArtifacts } from '@aichat/shared';
+import { parseArtifacts, parseUiFences } from '@aichat/shared';
 import { FileCode2, ArrowUpRight, LoaderCircle } from 'lucide-react';
 import { Markdown } from '../ui/Markdown.js';
 import { useArtifacts } from './ArtifactWorkspace.js';
+import { IntelligentUi } from '../intelligent-ui/IntelligentUi.js';
 
 export function ArtifactMessage({ text, messageId, block, live }: { text: string; messageId: string; block: number; live: boolean }) {
   const { open } = useArtifacts();
-  const artifacts = useMemo(() => parseArtifacts(text), [text]);
-  if (!artifacts.length) return <div data-quote-text><Markdown text={text} live={live} /></div>;
+  const partsToRender = useMemo(() => [
+    ...parseArtifacts(text).map((artifact, index) => ({ start: artifact.start, end: artifact.end, artifact, index })),
+    ...parseUiFences(text).map((ui, index) => ({ start: ui.start, end: ui.end, ui, index })),
+  ].sort((a, b) => a.start - b.start), [text]);
+  if (!partsToRender.length) return <div data-quote-text><Markdown text={text} live={live} /></div>;
   let cursor = 0;
-  const parts = artifacts.map((artifact, index) => {
-    const before = text.slice(cursor, artifact.start);
-    cursor = artifact.end;
-    return <div key={index}>
+  const parts = partsToRender.map(part => {
+    const before = text.slice(cursor, part.start);
+    cursor = part.end;
+    if ('ui' in part) return <div key={`ui:${part.index}`}>
+      {before.trim() && <div data-quote-text><Markdown text={before} live={live} /></div>}
+      <IntelligentUi key={`${messageId}:${block}:${part.index}`} code={part.ui.code} complete={part.ui.complete} live={live} instance={`${messageId}:${block}:${part.index}`} messageId={messageId} />
+    </div>;
+    const { artifact, index } = part;
+    return <div key={`artifact:${index}`}>
       {before.trim() && <div data-quote-text><Markdown text={before} live={live} /></div>}
       <button type="button" onClick={() => open(`${messageId}:${block}:${index}`)}
         className="my-3 flex w-full max-w-md items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-left transition-colors hover:border-accent-400 hover:bg-accent-500/5 dark:border-zinc-700 dark:bg-zinc-900">
