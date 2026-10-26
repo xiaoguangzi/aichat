@@ -17,6 +17,7 @@ import { AppError, errorToPayload } from '../util/errors.js';
 import { uuid } from '../util/id.js';
 import { config } from '../config.js';
 import { buildSystemPrompt } from './systemPrompt.js';
+import { conversationDate, withDateNotes } from './dates.js';
 import { shapeOldTurns, shapeTurnsForOverflow } from './history.js';
 import { isContextOverflowError } from '../llm/contextOverflow.js';
 import { delegateTool, type DelegateRun } from './delegate.js';
@@ -151,9 +152,10 @@ export async function buildRequestContext(conv: Conversation): Promise<{
   const storedMessages = messagesRepo.list(conv.id, conv.activeBranch ?? []);
   const turnId = [...storedMessages].reverse().find(m => m.role === 'user' && m.content.some(b => b.type !== 'tool_result'))?.id;
   const history: LLMMessage[] = [];
+  const date = conversationDate(storedMessages);
   // Replay stable prefixes; batch-compact old turns only when overhead crosses the budget.
   // Shape before hydrating so cleared media is never read from disk.
-  for (const m of shapeOldTurns(storedMessages, provider.type, (isOfficialDeepSeek(provider) && tools.length > 0) || responses)) {
+  for (const m of shapeOldTurns(withDateNotes(storedMessages, date), provider.type, (isOfficialDeepSeek(provider) && tools.length > 0) || responses)) {
     history.push({ role: m.role, content: await hydrateBlocks(m.content, provider.type, responses && model.caps.pdf) });
   }
   return {
@@ -165,6 +167,7 @@ export async function buildRequestContext(conv: Conversation): Promise<{
     system: buildSystemPrompt(conv, {
       hasTools: tools.length > 0,
       projectInstructions: conv.groupId ? groupsRepo.get(conv.groupId)?.instructions : undefined,
+      date,
     }),
     history,
     // Effort is a conversation setting; the model only says whether it can think at all and which

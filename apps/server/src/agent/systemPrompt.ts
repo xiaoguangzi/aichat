@@ -1,13 +1,17 @@
 import type { Conversation } from '@aichat/shared';
 import { skillRegistry } from '../skills/registry.js';
 import { intelligentUiPrompt } from './intelligentUiPrompt.js';
+import { localDate } from './dates.js';
 
 /**
  * `projectInstructions` come from the group the conversation lives in. They are composed here rather
  * than copied into `systemPrompt` so that editing the project changes the standing instructions of
  * every conversation in it, instead of only affecting the ones created afterwards.
+ *
+ * `date` is the day the conversation started (see dates.ts), not today: the system prompt opens the
+ * cached prefix, so it must not change when the clock passes midnight.
  */
-export function buildSystemPrompt(conv: Conversation, opts: { hasTools: boolean; projectInstructions?: string }): string {
+export function buildSystemPrompt(conv: Conversation, opts: { hasTools: boolean; projectInstructions?: string; date?: string }): string {
   const parts: string[] = [];
   const project = opts.projectInstructions?.trim();
   if (project) parts.push(project);
@@ -23,6 +27,6 @@ export function buildSystemPrompt(conv: Conversation, opts: { hasTools: boolean;
   parts.push('Formatting: math renders with KaTeX — write formulas as LaTeX ($...$ inline, $$...$$ on their own lines), not as ASCII inside a code block.');
   parts.push('Artifacts: For substantial self-contained deliverables (websites, interactive apps, SVG graphics, Mermaid diagrams, documents or reusable code), emit a fenced code block with metadata: ```html artifact id="stable-slug" title="Short title". Supported languages: html, jsx, tsx, svg, markdown, mermaid, or other code languages. Reuse the same id when revising an existing artifact and output its complete updated source, never a diff or placeholder. Use a fence longer than any fences inside the content. Ordinary explanations and short snippets should remain normal Markdown. HTML should be standalone with inline CSS/JS. React must default-export a component; available imports: react, react-dom/client, lucide-react, recharts. Use plain CSS or inline styles (no Tailwind runtime, npm installs, remote imports, backend APIs or local storage). Previews run in an isolated sandbox without network access for fetch or external assets. Keep explanatory text outside the artifact fence.');
   parts.push(intelligentUiPrompt);
-  parts.push(`Current date: ${new Date().toISOString().slice(0, 10)}`);
+  parts.push(`Current date: ${opts.date ?? localDate(new Date())}`);
   return parts.join('\n\n');
 }
