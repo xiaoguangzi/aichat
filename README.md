@@ -83,6 +83,8 @@ React 预览内置 React、Lucide 图标和 Recharts。预览在受限的 iframe
 
 配置 Exa MCP 后，可通过输入框的联网搜索开关启用或停用它；搜索需要相应服务的配置和权限。
 
+如果还添加了 DeepSeek 官方 API（`https://api.deepseek.com`）的供应商，联网搜索开启时模型还会获得 DeepSeek Search / Fetch 工具作为备选：Exa 限流或不可用时，模型改用 DeepSeek 继续搜索和读取网页。这些工具复用该供应商的 API key，按 DeepSeek 的价格按次计费。
+
 ### Skills
 
 在项目根目录的 `skills/` 下创建技能目录：

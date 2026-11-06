@@ -1,24 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { Globe2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import type { McpServer } from '@aichat/shared';
+import { isExaServer, isOfficialDeepSeekOrigin } from '@aichat/shared';
 import { api } from '../../api/client.js';
 import { useChat } from '../../store/chat.js';
 import { useSettings } from '../../store/settings.js';
 import { cn } from '../../lib/utils.js';
 
-export function isExaServer(server: McpServer): boolean {
-  if (/(^|[-_])exa($|[-_])/i.test(server.name)) return true;
-  if (server.transport === 'stdio') return [server.command, ...server.args].some((arg) => /(?:^|[/@])exa-mcp-server(?:@[^/]+)?$/.test(arg ?? ''));
-  try {
-    const host = new URL(server.url ?? '').hostname;
-    return host === 'exa.ai' || host.endsWith('.exa.ai');
-  } catch { return false; }
-}
-
 /** A shortcut to the persisted MCP setting, not a separate chat preference. */
 export function WebSearchToggle() {
   const servers = useSettings((s) => s.mcpServers);
+  // Mirrors the server: any provider on DeepSeek's official host with a key backs the fallback.
+  const fallback = useSettings((s) => s.providers.some((p) => p.hasApiKey && isOfficialDeepSeekOrigin(p.baseUrl)));
   const loadMcp = useSettings((s) => s.loadMcp);
   const running = useChat((s) => s.running);
   const allowed = useChat((s) => s.current?.settings.enabledMcpServers);
@@ -88,7 +81,7 @@ export function WebSearchToggle() {
     }
   };
 
-  const note = error || (excluded ? '当前会话未允许 Exa' : unavailable && !connecting ? 'Exa 未连接' : '');
+  const note = error || (excluded ? '当前会话未允许 Exa' : unavailable && !connecting ? (fallback ? 'Exa 未连接，改用 DeepSeek 搜索' : 'Exa 未连接') : '');
   return (
     <div className="relative inline-flex items-center gap-2">
       {exa.length ? (
@@ -99,7 +92,7 @@ export function WebSearchToggle() {
           aria-checked={enabled}
           disabled={busy || running}
           onClick={() => void toggle()}
-          title="同步 Exa MCP 的全局启用设置，适用于所有会话"
+          title={`同步 Exa MCP 的全局启用设置，适用于所有会话${fallback ? '；Exa 限流或不可用时改用 DeepSeek 搜索' : ''}`}
           className={cn('search-toggle', enabled && 'is-enabled', connecting && 'is-connecting')}
         >
           <Globe2 size={14} className={cn('transition-opacity', connecting && 'opacity-60')} />

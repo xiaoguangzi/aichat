@@ -2,8 +2,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
-import type { McpServer } from '@aichat/shared';
-import { WebSearchToggle, isExaServer } from '../components/chat/WebSearchToggle.js';
+import { isExaServer, type McpServer, type Provider } from '@aichat/shared';
+import { WebSearchToggle } from '../components/chat/WebSearchToggle.js';
 import { api } from '../api/client.js';
 import { useSettings } from '../store/settings.js';
 import { useChat } from '../store/chat.js';
@@ -13,7 +13,7 @@ const exa: McpServer = { id: 'exa-id', name: 'exa', transport: 'http', url: 'htt
 let root: Root;
 let host: HTMLDivElement;
 beforeEach(() => {
-  useSettings.setState({ mcpServers: [exa] });
+  useSettings.setState({ mcpServers: [exa], providers: [] });
   useChat.setState({ running: false, current: null });
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -65,6 +65,17 @@ it('distinguishes enabled from connected, and disables changes during generation
   expect(host.textContent).toContain('Exa 未连接');
   await act(async () => useChat.setState({ running: true }));
   expect(toggle().disabled).toBe(true);
+});
+
+it('says when DeepSeek search covers an unavailable Exa', async () => {
+  const provider = (baseUrl: string, hasApiKey = true) => ({ id: baseUrl, name: 'p', type: 'openai', baseUrl, hasApiKey, apiKeyMasked: '', extraHeaders: {}, compat: {}, createdAt: '', models: [] }) as unknown as Provider;
+  useSettings.setState({ mcpServers: [{ ...exa, status: 'error', error: 'down' }], providers: [provider('https://api.deepseek.com/v1', false), provider('https://gateway.example.com')] });
+  await mount();
+  expect(host.textContent).toContain('Exa 未连接');
+  expect(host.textContent).not.toContain('DeepSeek');
+  await act(async () => useSettings.setState({ providers: [provider('https://api.deepseek.com/v1')] }));
+  expect(host.textContent).toContain('Exa 未连接，改用 DeepSeek 搜索');
+  expect(toggle().title).toContain('DeepSeek');
 });
 
 it('links to configuration when absent and does not match unrelated servers', async () => {

@@ -5,6 +5,7 @@ import { skillRegistry } from '../skills/registry.js';
 import { rememberApproval, requestApproval } from './approvals.js';
 import { READ_RESULT_TOOL, readToolResult } from './toolResults.js';
 import { DELEGATE_TOOL, runDelegate, type DelegateRun } from './delegate.js';
+import { isDeepseekSearchTool, isExaTool, isRateLimited, runDeepseekTool, withRateLimitFallback } from './webSearch.js';
 
 export interface ToolContext {
   conversationId: string;
@@ -14,6 +15,8 @@ export interface ToolContext {
   delegate?: DelegateRun;
   /** True when this approval should be written down as a standing rule. */
   rememberApproval?: boolean;
+  /** DeepSeek search is in this request's tool list, so a rate-limited Exa result can point to it. */
+  searchFallback?: boolean;
 }
 
 export interface ToolOutcome {
@@ -28,9 +31,14 @@ export async function executeTool(name: string, input: unknown, ctx: ToolContext
       if (!ctx.delegate) return { content: [{ type: 'text', text: 'Sub-agents are not available for this model.' }], isError: true };
       return runDelegate(input, ctx.delegate, ctx.signal);
     }
+    if (isDeepseekSearchTool(name)) {
+      // Offered only while web search is on; an old call in history must not bypass the switch.
+      if (!ctx.searchFallback) return { content: [{ type: 'text', text: 'DeepSeek search is not available: web search is off or no DeepSeek API key is configured.' }], isError: true };
+      return runDeepseekTool(name, input, ctx.signal);
+    }
     if (name.startsWith('mcp__')) {
       const r = await mcpManager.callTool(name, input, ctx.signal);
-      return r;
+      return ctx.searchFallback && isRateLimited(r) && isExaTool(name) ? withRateLimitFallback(r) : r;
     }
     if (isSkillTool(name)) {
       if (name === 'skill__run_script') {

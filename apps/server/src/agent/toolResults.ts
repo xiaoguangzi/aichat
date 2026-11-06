@@ -51,8 +51,8 @@ function searchPreview(text: string, budget: number): string | null {
   for (let i = 0; i < count; i++) {
     const start = starts[i]!;
     const raw = text.slice(start, starts[i + 1] ?? text.length);
-    const metadata = raw.split('\n').filter(line => /^(Title|URL|Published|Published Date|Author):/.test(line)).join('\n');
-    const body = raw.replace(/^(Title|URL|Published|Published Date|Author):.*\n?/gm, '').trim();
+    const metadata = raw.split('\n').filter(line => /^(Title|URL|Published|Published Date|Author|Site):/.test(line)).join('\n');
+    const body = raw.replace(/^(Title|URL|Published|Published Date|Author|Site):.*\n?/gm, '').trim();
     const head = excerpt(body, 0, Math.max(0, perCard - metadata.length)).text;
     cards.push(`[Source ${i + 1}; offset ${start}]\n${metadata}\n${head}`);
   }

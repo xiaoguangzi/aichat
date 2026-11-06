@@ -23,6 +23,7 @@ import { delegateTool, type DelegateRun } from './delegate.js';
 import { estimateContext } from './context.js';
 import { isOfficialDeepSeek } from '../llm/openai/deepseek.js';
 import { executeTool } from './toolRouter.js';
+import { DEEPSEEK_SEARCH_TOOL, fallbackSearchTools } from './webSearch.js';
 import { toolResultsRepo } from '../db/repos/toolResults.js';
 import { TurnTimer } from './timing.js';
 import { stableToolDefs } from '../llm/tools.js';
@@ -143,7 +144,11 @@ export async function buildRequestContext(conv: Conversation): Promise<{
   const settings = conv.settings;
 
   let tools = model.caps.tools
-    ? [...mcpManager.toolDefs(settings.enabledMcpServers ?? 'all'), ...skillToolDefs(settings.enabledSkills ?? 'all')]
+    ? [
+        ...mcpManager.toolDefs(settings.enabledMcpServers ?? 'all'),
+        ...skillToolDefs(settings.enabledSkills ?? 'all'),
+        ...fallbackSearchTools(settings.enabledMcpServers ?? 'all'),
+      ]
     : [];
   if (model.caps.tools && (tools.length || toolResultsRepo.has(conv.id))) tools.push(readResultTool);
   if (model.caps.tools) tools.push(delegateTool);
@@ -210,6 +215,7 @@ export async function runAgent(opts: RunOptions): Promise<void> {
   const ctx = await buildRequestContext(conv);
   const { adapter, model, provider, responses, tools, system, history, maxTokens, reasoning, attribution } = ctx;
   const settings = conv.settings;
+  const searchFallback = tools.some((t) => t.name === DEEPSEEK_SEARCH_TOOL);
   const turnId = ctx.turnId;
   // New rows continue the branch being viewed. The first reply attaches to whatever the branch ended
   // with; later replies in the same turn attach to the tool result that precedes them.
@@ -360,7 +366,7 @@ export async function runAgent(opts: RunOptions): Promise<void> {
       const outcomes = await Promise.all(
         toolUses.map(async (t) => {
           const started = Date.now();
-          const r = await executeTool(t.name, t.input, { conversationId: conv.id, signal, emit, delegate: delegateRun });
+          const r = await executeTool(t.name, t.input, { conversationId: conv.id, signal, emit, delegate: delegateRun, searchFallback });
           const durationMs = Date.now() - started;
           return { t, r, durationMs };
         }),

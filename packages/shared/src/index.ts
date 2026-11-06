@@ -5,3 +5,4 @@ export * from './artifacts.js';
 export * from './intelligent-ui.js';
 export * from './traces.js';
 export * from './jev.js';
+export * from './webSearch.js';
