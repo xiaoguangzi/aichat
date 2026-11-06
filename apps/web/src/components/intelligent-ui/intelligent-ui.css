@@ -1,101 +1,711 @@
 .intelligent-ui {
-  --iui-series-2: #b77928;
-  --iui-series-3: #8262ba;
-  --iui-series-4: #278777;
+  --iui-series-2: #f59e0b;
+  --iui-series-3: #8b5cf6;
+  --iui-series-4: #10b981;
   container-type: inline-size;
-  margin: 24px 0 16px;
-  color: var(--chat-prose);
+  margin: 16px 0;
+  color: var(--chat-ink);
   font-size: var(--chat-body-size);
   line-height: var(--chat-body-leading);
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 .dark .intelligent-ui {
-  --iui-series-2: #d4a361;
-  --iui-series-3: #b19bda;
-  --iui-series-4: #6ab6a7;
+  --iui-series-2: #fbbf24;
+  --iui-series-3: #a78bfa;
+  --iui-series-4: #34d399;
 }
-.iui-header { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
-.iui-heading { min-width: 0; flex: 1 1 180px; }
-.iui-heading h2 { font-size: var(--chat-heading-size); font-weight: 600; line-height: var(--chat-body-leading); letter-spacing: -.025em; color: var(--chat-ink); overflow-wrap: anywhere; }
-.iui-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
-.iui-badge { display: inline-flex; align-items: center; gap: 4px; color: var(--chat-text-muted); font-size: 11px; white-space: nowrap; }
-.iui-status { font-size: 11px; color: var(--chat-text-muted); }
-.iui-reset { min-width: 28px; min-height: 28px; padding: 6px; }
-.iui-description { margin: 5px 0 0; color: var(--chat-text-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
-.iui-body { display: flex; flex-direction: column; gap: 16px; margin-top: 14px; }
-.iui-node { min-width: 0; }
-.iui-control-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; }
-.iui-control-group > :first-child:nth-last-child(odd) { grid-column: 1 / -1; }
-.iui-text { white-space: pre-wrap; overflow-wrap: anywhere; }
-.iui-control { display: block; }
-.iui-control > span { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 8px; margin-bottom: 6px; color: var(--chat-text-secondary); font-size: 13px; font-weight: 500; }
-.iui-control output { font-variant-numeric: tabular-nums; font-weight: 500; color: var(--chat-accent); }
-.iui-control > small { display: flex; justify-content: space-between; gap: 8px; color: var(--chat-text-muted); font-size: 11px; }
-.iui-control input[type=number], .iui-control select { min-height: 36px; font-size: 13px; }
-.iui-control input[type=range] { appearance: none; display: block; width: 100%; height: 28px; margin: 0; background: transparent; cursor: pointer; }
-.iui-control input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: linear-gradient(to right, var(--chat-accent) var(--iui-range-progress), var(--chat-control-line) var(--iui-range-progress)); }
-.iui-control input[type=range]::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; margin-top: -5px; border: 2px solid var(--chat-accent); border-radius: 50%; background: var(--chat-surface); box-shadow: 0 1px 3px rgb(15 23 42 / 10%); }
-.iui-control input[type=range]::-moz-range-track { height: 4px; border-radius: 999px; background: var(--chat-control-line); }
-.iui-control input[type=range]::-moz-range-progress { height: 4px; border-radius: 999px; background: var(--chat-accent); }
-.iui-control input[type=range]::-moz-range-thumb { width: 10px; height: 10px; border: 2px solid var(--chat-accent); border-radius: 50%; background: var(--chat-surface); }
-.intelligent-ui :is(input, select, button, summary):focus-visible { outline: 2px solid var(--color-accent-500); outline-offset: 3px; }
-.iui-choice legend { margin-bottom: 6px; font-size: 13px; font-weight: 500; color: var(--chat-text-secondary); }
-.iui-choice > div { display: inline-flex; flex-wrap: wrap; gap: 3px; padding: 3px; border: 1px solid var(--chat-line); border-radius: 12px; background: var(--chat-surface-soft); }
-.iui-choice button { min-height: 30px; padding: 5px 12px; border-radius: 8px; }
-.iui-choice button[aria-pressed=true] { background: var(--chat-surface); color: var(--chat-accent); box-shadow: 0 1px 3px rgb(15 23 42 / 8%); }
-.iui-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr)); gap: 1px; border: 1px solid var(--chat-accent-line); border-radius: 12px; overflow: hidden; background: var(--chat-accent-line); }
-.iui-metric { height: 100%; padding: 12px 14px; background: var(--chat-accent-soft); }
-.iui-metric > span { font-size: 12px; color: var(--chat-text-secondary); }
-.iui-metric output { display: block; margin-top: 4px; font-size: clamp(20px, 4.5cqw, 26px); font-weight: 600; line-height: 1.4; letter-spacing: -.02em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.iui-metric small { margin-left: 5px; font-size: 12px; font-weight: 400; letter-spacing: 0; color: var(--chat-text-secondary); }
-.iui-metric p { margin-top: 5px; font-size: 12px; color: var(--chat-text-muted); }
-.iui-check { display: flex; align-items: flex-start; gap: 9px; min-height: 32px; cursor: pointer; }
-.iui-check input { margin-top: 4px; flex-shrink: 0; width: 16px; height: 16px; accent-color: var(--chat-accent); }
-.iui-check strong { font-size: 13px; font-weight: 500; }
-.iui-check small { display: block; font-size: 12px; color: var(--chat-text-muted); }
-.iui-check input:checked + span strong { text-decoration: line-through; color: var(--chat-text-muted); }
-.iui-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 10px; }
-.iui-cards article { padding: 12px 14px; border: 1px solid var(--chat-line); border-radius: 12px; background: var(--chat-surface-soft); }
-.iui-cards h4, .iui-diagram h4 { margin-bottom: 6px; font-size: var(--chat-body-size); font-weight: 600; }
-.iui-cards p { white-space: pre-wrap; overflow-wrap: anywhere; }
-.iui-table-scroll { max-width: 100%; overflow-x: auto; border: 1px solid var(--chat-line); border-radius: 12px; }
-.intelligent-ui table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
-.intelligent-ui :is(td, th) { padding: 8px 12px; border-bottom: 1px solid var(--chat-line); min-width: 90px; }
-.intelligent-ui th { font-size: 12px; font-weight: 600; color: var(--chat-text-secondary); background: var(--chat-surface-soft); }
-.intelligent-ui tr:last-child td { border-bottom: 0; }
-.iui-chart figcaption { margin-bottom: 6px; font-size: 13px; font-weight: 500; }
-.iui-chart svg { width: 100%; touch-action: pan-y; }
-.iui-chart svg text { fill: var(--chat-text-muted); font-size: 12px; }
-.iui-gridline { stroke: var(--chat-line); }
-.iui-probe { stroke: var(--chat-text-muted); stroke-dasharray: 3 4; }
-.iui-chart-labels { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--chat-text-muted); }
-.iui-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 6px; font-size: 12px; color: var(--chat-text-secondary); }
-.iui-legend > span { display: inline-flex; align-items: center; gap: 5px; }
-.iui-legend i { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; }
-.iui-chart-data { margin-top: 8px; }
-.iui-chart-data summary { font-size: 11px; color: var(--chat-text-muted); cursor: pointer; }
-.iui-chart-data .iui-table-scroll { margin-top: 8px; }
-.iui-diagram-nodes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr)); gap: 6px; }
-.iui-diagram-nodes button { width: 100%; min-width: 0; min-height: 32px; border: 1px solid var(--chat-line); white-space: normal; overflow-wrap: anywhere; }
-.iui-diagram-nodes button[aria-pressed=true] { background: var(--chat-accent-soft); border-color: var(--chat-accent-line); color: var(--chat-accent); }
-.iui-connections { display: grid; grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) minmax(0, .6fr); gap: 4px 8px; margin-top: 10px; }
-.iui-connections li { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: baseline; font-size: 12px; }
-.iui-connections :is(span, small) { min-width: 0; overflow-wrap: anywhere; }
-.iui-connections span[aria-label] { text-align: center; }
-.iui-connections small { color: var(--chat-text-muted); }
-.iui-diagram-detail { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--chat-surface-soft); }
-.iui-diagram-detail p { white-space: pre-wrap; }
-.iui-action { min-height: 34px; }
-.iui-waiting, .iui-error { margin: 12px 0; font-size: 12px; color: var(--chat-text-muted); }
-.iui-error { color: #b45309; }.dark .iui-error { color: #fbbf24; }
-.iui-source { margin-top: 8px; font-size: 11px; color: var(--chat-text-muted); }
-.iui-source summary { display: flex; align-items: center; justify-content: flex-end; gap: 5px; min-height: 24px; cursor: pointer; }
-.iui-source summary:hover { color: var(--chat-accent); }
-.iui-source pre { margin-top: 8px; padding: 12px; border-radius: 10px; background: var(--chat-surface-soft); overflow: auto; max-height: 300px; white-space: pre; font-size: 11px; }
+
+/* CSS reset for elements within Intelligent UI to prevent browser margin artifacts */
+.intelligent-ui :is(figure, fieldset, h2, h3, h4, p, ul) {
+  margin: 0;
+  padding: 0;
+}
+.intelligent-ui fieldset {
+  border: 0;
+  min-width: 0;
+}
+
+.intelligent-ui :is(input, select, button, summary):focus-visible {
+  outline: 2px solid var(--chat-accent);
+  outline-offset: 2px;
+}
+
+/* Header: conversational subtle header without card chrome */
+.iui-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 6px;
+}
+.iui-heading {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.iui-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  color: var(--chat-ink);
+  overflow-wrap: anywhere;
+}
+.iui-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.iui-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--chat-text-muted);
+}
+.iui-pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--chat-accent);
+  display: inline-block;
+  animation: iui-pulse 1.4s ease-in-out infinite;
+}
+@keyframes iui-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+.iui-reset {
+  min-width: 24px;
+  height: 24px;
+  padding: 3px;
+  border-radius: 6px;
+  color: var(--chat-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.iui-reset:hover {
+  color: var(--chat-ink);
+  background: var(--chat-surface-soft);
+}
+.iui-description {
+  margin: 0 0 12px 0;
+  color: var(--chat-text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Main body flow */
+.iui-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.iui-node {
+  min-width: 0;
+}
+
+/* Natural paragraph text */
+.iui-text {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--chat-text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Controls layout: adaptive grid without awkward odd-item stretching */
+.iui-control-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+  gap: 12px 16px;
+}
+
+/* Slider, Number, Select controls */
+.iui-control {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.iui-control > span {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--chat-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+.iui-control output {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--chat-ink);
+  background: none;
+  border: none;
+  padding: 0;
+}
+.iui-control > small {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--chat-text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+.iui-control input[type=number],
+.iui-control select {
+  height: 32px;
+  min-height: 32px;
+  font-size: 13px;
+  border-radius: 8px;
+  border: 1px solid var(--chat-line);
+  background: var(--chat-surface);
+  color: var(--chat-ink);
+  padding: 4px 8px;
+  transition: border-color 0.15s ease;
+}
+.iui-control input[type=number]:hover,
+.iui-control select:hover {
+  border-color: var(--chat-control-line);
+}
+.iui-control input[type=number]:focus,
+.iui-control select:focus {
+  border-color: var(--chat-accent);
+  outline: none;
+}
+.dark .iui-control select option {
+  background: var(--chat-surface);
+  color: var(--chat-ink);
+}
+
+.iui-control input[type=range] {
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  width: 100%;
+  height: 20px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.iui-control input[type=range]:focus-visible {
+  outline: none;
+}
+.iui-control input[type=range]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--chat-accent) var(--iui-range-progress), var(--chat-control-line) var(--iui-range-progress));
+}
+.iui-control input[type=range]::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border: 2px solid var(--chat-accent);
+  border-radius: 50%;
+  background: var(--chat-surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  transition: transform 0.1s ease;
+}
+.iui-control input[type=range]:hover::-webkit-slider-thumb,
+.iui-control input[type=range]:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+.iui-control input[type=range]::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--chat-control-line);
+}
+.iui-control input[type=range]::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--chat-accent);
+}
+.iui-control input[type=range]::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--chat-accent);
+  border-radius: 50%;
+  background: var(--chat-surface);
+}
+
+/* Choice: lightweight Segmented Control */
+.iui-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.iui-choice legend {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--chat-text-secondary);
+}
+.iui-choice > div {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--chat-line);
+  border-radius: 8px;
+  background: var(--chat-surface-soft);
+  width: fit-content;
+  max-width: 100%;
+}
+.iui-choice button {
+  min-height: 28px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--chat-text-secondary);
+  background: transparent;
+  border: none;
+  transition: all 0.15s ease;
+}
+.iui-choice button:hover:not([aria-pressed=true]) {
+  color: var(--chat-ink);
+  background: rgba(0, 0, 0, 0.04);
+}
+.dark .iui-choice button:hover:not([aria-pressed=true]) {
+  background: rgba(255, 255, 255, 0.05);
+}
+.iui-choice button[aria-pressed=true] {
+  background: var(--chat-surface);
+  color: var(--chat-ink);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.dark .iui-choice button[aria-pressed=true] {
+  background: var(--chat-surface);
+  color: var(--chat-ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Check */
+.iui-check-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.iui-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+  user-select: none;
+}
+.iui-check input {
+  margin-top: 2px;
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  accent-color: var(--chat-accent);
+  cursor: pointer;
+}
+.iui-check strong {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--chat-ink);
+  transition: color 0.15s ease;
+}
+.iui-check small {
+  display: block;
+  font-size: 12px;
+  color: var(--chat-text-muted);
+  margin-top: 1px;
+}
+.iui-check input:checked + span strong {
+  text-decoration: line-through;
+  color: var(--chat-text-muted);
+}
+
+/* Metric: minimalist editorial numbers without card borders */
+.iui-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 28px;
+  align-items: flex-start;
+}
+.iui-node-metric {
+  min-width: 100px;
+}
+.iui-metric {
+  display: flex;
+  flex-direction: column;
+}
+.iui-metric > span {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--chat-text-secondary);
+  line-height: 1.4;
+}
+.iui-metric output {
+  display: block;
+  margin-top: 2px;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  color: var(--chat-ink);
+}
+.iui-metric small {
+  margin-left: 3px;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: normal;
+  color: var(--chat-text-muted);
+}
+.iui-metric p {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--chat-text-muted);
+}
+
+/* Cards: clean grouping with low visual weight */
+.iui-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 8px;
+}
+.iui-cards article {
+  padding: 10px 12px;
+  border: 1px solid var(--chat-line);
+  border-radius: 8px;
+  background: var(--chat-surface);
+  transition: border-color 0.15s ease;
+}
+.iui-cards article:hover {
+  border-color: var(--chat-control-line);
+}
+.iui-cards h4 {
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--chat-ink);
+}
+.iui-cards p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--chat-text-secondary);
+}
+
+/* Table: low-contrast borders and understated header */
+.iui-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--chat-line);
+  border-radius: 8px;
+  background: var(--chat-surface);
+}
+.intelligent-ui table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+.intelligent-ui :is(td, th) {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--chat-line);
+  min-width: 80px;
+}
+.intelligent-ui th {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--chat-text-secondary);
+  background: var(--chat-surface-soft);
+}
+.intelligent-ui td {
+  color: var(--chat-ink);
+}
+.intelligent-ui tr:last-child td {
+  border-bottom: 0;
+}
+.intelligent-ui tbody tr:hover td {
+  background: var(--chat-surface-soft);
+}
+
+/* Chart: transparent background, clean axis and gridlines */
+.iui-chart {
+  margin: 0;
+}
+.iui-chart figcaption {
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--chat-ink);
+}
+.iui-chart svg {
+  width: 100%;
+  display: block;
+  touch-action: pan-y;
+  border: 1px solid var(--chat-line);
+  border-radius: 8px;
+  background: transparent;
+}
+.iui-chart svg text {
+  fill: var(--chat-text-muted);
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.iui-gridline {
+  stroke: var(--chat-line);
+  stroke-dasharray: 2 4;
+}
+.iui-probe {
+  stroke: var(--chat-accent);
+  stroke-dasharray: 3 3;
+}
+.iui-chart-labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--chat-text-muted);
+}
+.iui-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--chat-text-secondary);
+}
+.iui-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.iui-legend i {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.iui-chart-data {
+  margin-top: 6px;
+}
+.iui-chart-data summary {
+  font-size: 11px;
+  color: var(--chat-text-muted);
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s ease;
+}
+.iui-chart-data summary:hover {
+  color: var(--chat-accent);
+}
+.iui-chart-data .iui-table-scroll {
+  margin-top: 6px;
+}
+
+/* Diagram: clean node chips and connection list */
+.iui-diagram {
+  margin: 0;
+}
+.iui-diagram h4 {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--chat-ink);
+}
+.iui-diagram-nodes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.iui-diagram-nodes button {
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid var(--chat-line);
+  border-radius: 6px;
+  background: var(--chat-surface);
+  color: var(--chat-ink);
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+.iui-diagram-nodes button:hover:not([aria-pressed=true]) {
+  border-color: var(--chat-control-line);
+  background: var(--chat-surface-soft);
+}
+.iui-diagram-nodes button[aria-pressed=true] {
+  background: var(--chat-accent-soft);
+  border-color: var(--chat-accent);
+  color: var(--chat-accent);
+  font-weight: 600;
+}
+.iui-connections {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 0;
+  list-style: none;
+}
+.iui-connections li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--chat-surface-soft);
+  color: var(--chat-text-secondary);
+}
+.iui-connections span:first-child {
+  font-weight: 500;
+  color: var(--chat-ink);
+}
+.iui-connections span[aria-label] {
+  color: var(--chat-text-muted);
+}
+.iui-connections small {
+  color: var(--chat-text-muted);
+  font-size: 11px;
+  margin-left: auto;
+}
+.iui-diagram-detail {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--chat-line);
+  background: var(--chat-surface-soft);
+  font-size: 12px;
+}
+.iui-diagram-detail strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--chat-ink);
+  margin-bottom: 2px;
+}
+.iui-diagram-detail p {
+  color: var(--chat-text-secondary);
+  line-height: 1.45;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+/* Action: suggested conversational action pill */
+.iui-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.iui-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 14px;
+  border-radius: 9999px;
+  border: 1px solid var(--chat-line);
+  background: var(--chat-surface);
+  color: var(--chat-ink);
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  width: fit-content;
+}
+.iui-action:hover:enabled {
+  background: var(--chat-surface-soft);
+  border-color: var(--chat-control-line);
+  color: var(--chat-ink);
+}
+.iui-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.iui-action svg {
+  transition: transform 0.15s ease;
+}
+.iui-action:hover:enabled svg {
+  transform: translate(1px, -1px);
+}
+
+/* Waiting & Error */
+.iui-waiting {
+  margin: 8px 0;
+  font-size: 12px;
+  color: var(--chat-text-muted);
+}
+.iui-error {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+.dark .iui-error {
+  background: rgba(120, 53, 15, 0.2);
+  border-color: rgba(120, 53, 15, 0.4);
+  color: #fcd34d;
+}
+
+/* Source viewer: unobtrusive foldout */
+.iui-source {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--chat-text-muted);
+}
+.iui-source summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s ease;
+  color: var(--chat-text-muted);
+}
+.iui-source summary:hover {
+  color: var(--chat-ink);
+}
+.iui-source pre {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--chat-line);
+  background: var(--chat-surface-soft);
+  overflow: auto;
+  max-height: 240px;
+  white-space: pre;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--chat-text-secondary);
+  line-height: 1.45;
+}
+
+/* Container query responsiveness */
 @container (max-width: 480px) {
-  .iui-connections { grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr); }
-  .iui-connections small { grid-column: 3; }
-  .iui-control-group { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .iui-metrics > :last-child:nth-child(odd) { grid-column: 1 / -1; }
-  .iui-header { gap: 4px 8px; }
-  .iui-heading { flex-basis: 150px; }
+  .iui-control-group {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .iui-metrics {
+    gap: 12px 20px;
+  }
 }
