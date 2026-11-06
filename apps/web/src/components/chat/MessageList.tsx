@@ -206,9 +206,7 @@ export function MessageList() {
         <div ref={inner} className="mx-auto flex max-w-3xl flex-col gap-7">
           {visible.length === 0 && !liveStreaming && (
             <div className="fade-in mt-24 flex flex-col items-center text-center px-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-500/10 shadow-inner ring-1 ring-accent-500/20 mb-4">
-                <LogoMark size="lg" />
-              </div>
+              <LogoMark size="lg" className="mb-4" />
               <div className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
                 How can I help you today?
               </div>

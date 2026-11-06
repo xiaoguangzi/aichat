@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <style>
+    .fg { fill: #09090b; }
+    @media (prefers-color-scheme: dark) { .fg { fill: #f4f4f5; } }
+  </style>
+  <defs>
+    <clipPath id="bubble">
+      <path d="M380 246 L660 248 L696 258 L725 272 L748 288 L772 311 L796 344 L809 373 L815 397 L818 419 L818 563 L810 607 L801 630 L781 664 L761 688 L741 706 L713 724 L691 734 L661 742 L441 744 L322 846 L313 848 L309 845 L308 726 L272 701 L242 672 L220 640 L204 602 L198 569 L198 415 L204 384 L213 359 L231 328 L254 302 L277 283 L312 263 L352 250 L379 247 Z"/>
+    </clipPath>
+    <mask id="mark" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <circle cx="510" cy="514" r="471" fill="white"/>
+      <path fill="black" d="M380 246 L660 248 L696 258 L725 272 L748 288 L772 311 L796 344 L809 373 L815 397 L818 419 L818 563 L810 607 L801 630 L781 664 L761 688 L741 706 L713 724 L691 734 L661 742 L441 744 L322 846 L313 848 L309 845 L308 726 L272 701 L242 672 L220 640 L204 602 L198 569 L198 415 L204 384 L213 359 L231 328 L254 302 L277 283 L312 263 L352 250 L379 247 Z"/>
+      <g clip-path="url(#bubble)" fill="none" stroke="white" stroke-linejoin="round" stroke-linecap="butt">
+        <g stroke-width="35">
+          <path d="M198 441 H370 L460 357 H535"/>
+          <path d="M198 543 H415 L480 487 H615"/>
+          <path d="M345 680 L400 640 L430 621 H500"/>
+        </g>
+        <g stroke-width="29">
+          <circle cx="590" cy="357" r="40.5"/>
+          <circle cx="670" cy="487" r="40.5"/>
+          <circle cx="555" cy="615" r="40.5"/>
+        </g>
+      </g>
+    </mask>
+  </defs>
+  <rect width="1024" height="1024" class="fg" mask="url(#mark)"/>
+</svg>
