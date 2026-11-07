@@ -67,6 +67,17 @@ body {
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
+/* A new turn settles into place: a slightly longer, softer rise than the generic fade-in.
+   Applied once on genuine arrival (see MessageList), never on history fill or stream handoff. */
+.msg-enter { animation: msg-enter 0.32s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes msg-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* The reply footer (usage / timing / actions) appears as the stream settles. */
+.msg-settle { animation: fade-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
 /* skip layout/paint for offscreen messages — big win when switching long conversations */
 .msg-item { content-visibility: auto; contain-intrinsic-size: auto 120px; }
 

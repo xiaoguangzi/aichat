@@ -149,7 +149,7 @@ export const MessageItem = memo(function MessageItem({ message, streaming, resul
         )}
         <VariantSwitcher message={message} onSwitchBranch={onSwitchBranch} align="left" />
         {!streaming && showFooter && (
-          <div className="mt-2 flex flex-wrap items-center gap-1 text-xs text-zinc-400">
+          <div className="msg-settle mt-2 flex flex-wrap items-center gap-1 text-xs text-zinc-400">
             {message.model && modelSwitch && <span
               title={`本轮由 ${message.model.label} 生成，上一轮是 ${modelSwitch}${message.model.id ? '' : '。该模型已从模型服务中删除'}`}
               className="mr-1 max-w-56 truncate rounded px-1.5 py-0.5 text-[11px] text-zinc-500 bg-zinc-100 dark:bg-zinc-800/80 dark:text-zinc-400"

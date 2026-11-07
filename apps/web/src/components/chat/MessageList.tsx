@@ -58,6 +58,20 @@ export function MessageList() {
     return turns;
   }, [visible, liveStreaming]);
 
+  // A user turn's React key is its ordinal among user turns, not its message id: a sent message
+  // first renders under an optimistic tmp_ id and then the server's real id, and an id key would
+  // remount the bubble on that handoff. The ordinal is invariant across the swap, so the node is
+  // reused. Assistant turns keep their message id, which is stable from message_start on.
+  const turnKeys = useMemo(() => {
+    const map = new Map<string, string>();
+    let n = 0;
+    for (const turn of groups) {
+      const first = turn[0]!;
+      map.set(first.id, first.role === 'user' ? `user-${n++}` : first.id);
+    }
+    return map;
+  }, [groups]);
+
   const onRegenerate = useCallback(() => void regenerate(), [regenerate]);
   const onSwitchBranch = useCallback((messageId: string) => void switchBranch(messageId), [switchBranch]);
   const onContinue = useCallback((messageId: string) => void continueFrom(messageId), [continueFrom]);
@@ -67,6 +81,26 @@ export function MessageList() {
   const onProcessToggle = useCallback(() => { stick.current = false; }, []);
 
   const inner = useRef<HTMLDivElement>(null);
+  // Entry animation for a genuinely new turn (sent message / new reply), kicked from the wrapper's
+  // mount ref so it is safe under StrictMode's double render. `known` (updated post-commit) holds
+  // the stable keys of turns already on screen; a turn animates only when it is new, is the last
+  // one, and belongs to the conversation being viewed. That excludes history loads, the background
+  // tail→full fill, conversation switches, and bulk replacements like branch switching. `animated`
+  // makes the animation one-shot even though the inline ref re-fires on every render.
+  const known = useRef<{ conv: string | null | undefined; keys: Set<string> }>({ conv: undefined, keys: new Set() });
+  const animated = useRef(new Set<string>());
+  useEffect(() => {
+    known.current = { conv: currentId, keys: new Set(groups.map((t) => turnKeys.get(t[0]!.id)!)) };
+  }, [groups, currentId, turnKeys]);
+  const turnRef = useCallback((node: HTMLDivElement | null, id: string, role: string, key: string, isLast: boolean) => {
+    if (role === 'user') { if (node) anchors.current.set(id, node); else anchors.current.delete(id); }
+    if (!node || !isLast) return;
+    const k = known.current;
+    if (k.conv === currentId && !k.keys.has(key) && !animated.current.has(key)) {
+      animated.current.add(key);
+      node.classList.add('msg-enter');
+    }
+  }, [currentId]);
   const pin = useCallback(() => {
     const el = ref.current;
     if (el && stick.current) {
@@ -134,8 +168,15 @@ export function MessageList() {
   // switching conversations resets stickiness so the new list opens at the bottom
   const prevConv = useRef(currentId);
   if (prevConv.current !== currentId) {
+    const fromDraft = prevConv.current == null;
     prevConv.current = currentId;
     stick.current = true;
+    // Opening a conversation mounts its history before the post-commit effect records it; a
+    // sentinel conv keeps those refs from animating. Exception: the first send from the draft
+    // creates the conversation and the optimistic message in one commit — that lone turn is a
+    // genuine arrival and should animate.
+    known.current = fromDraft && groups.length <= 1 ? { conv: currentId, keys: new Set() } : { conv: undefined, keys: new Set() };
+    animated.current.clear();
     if (budget !== TAIL) setBudget(TAIL);
   }
 
@@ -233,14 +274,17 @@ export function MessageList() {
               )}
             </div>
           )}
-          {rendered.map((turn) => {
+          {rendered.map((turn, turnIndex) => {
             const first = turn[0]!;
             const last = turn.at(-1)!;
             const active = running && turn === groups.at(-1);
+            const key = turnKeys.get(first.id)!;
             return (
-              <div key={first.id} className={cn(!active && 'msg-item', first.role === 'user' && 'message-anchor')}
+              // msg-enter joins the className once animated: later renders (e.g. `active` flipping)
+              // rewrite the class attribute, which would strip an externally-added class mid-animation.
+              <div key={key} className={cn(!active && 'msg-item', first.role === 'user' && 'message-anchor', animated.current.has(key) && 'msg-enter')}
                 data-user-message-id={first.role === 'user' ? first.id : undefined}
-                ref={first.role === 'user' ? (node) => { if (node) anchors.current.set(first.id, node); else anchors.current.delete(first.id); } : undefined}>
+                ref={(node) => turnRef(node, first.id, first.role, key, turnIndex === rendered.length - 1)}>
                 {first.role === 'assistant' ? <AssistantTurn
                   messages={turn}
                   streamingId={liveStreaming?.id}

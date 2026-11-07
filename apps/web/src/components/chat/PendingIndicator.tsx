@@ -29,7 +29,7 @@ export function PendingIndicator({ since }: { since: number }) {
   return (
     <div
       className={cn(
-        'my-2.5 inline-flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-xs transition-colors duration-300',
+        'msg-settle my-2.5 inline-flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-xs transition-colors duration-300',
         slow
           ? 'border-accent-300/60 dark:border-accent-800/50 bg-accent-50/60 dark:bg-accent-950/20 text-accent-700 dark:text-accent-300'
           : 'border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/70 dark:bg-zinc-900/40 text-zinc-600 dark:text-zinc-400',
