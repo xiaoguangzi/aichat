@@ -116,7 +116,10 @@ export function MessageList() {
     const onScroll = () => {
       const top = Math.max(0, el.scrollTop);
       const delta = top - lastScrollTop.current;
-      if (delta < 0) stick.current = false;
+      // Content shrinking above the viewport (a collapsed process disclosure, a reflow) clamps
+      // scrollTop down to the bottom and fires an event that looks like an upward gesture.
+      // A real pause ends away from the bottom; a gesture at the boundary is already recorded.
+      if (delta < 0) { if (el.scrollHeight - top - el.clientHeight > 0.5) stick.current = false; }
       else if (delta > 0) stick.current = el.scrollHeight - top - el.clientHeight < 80;
       lastScrollTop.current = top;
     };

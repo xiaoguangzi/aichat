@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Brain, ChevronDown } from 'lucide-react';
 import { Markdown } from '../ui/Markdown';
 import { cn } from '../../lib/utils';
@@ -6,10 +6,55 @@ import { cn } from '../../lib/utils';
 /** `defaultOpen` keeps short summaries readable once their collapsed process is expanded. */
 export function ThinkingBlock({ text, streaming, defaultOpen = false }: { text: string; streaming: boolean; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(streaming || defaultOpen);
+  const body = useRef<HTMLDivElement>(null);
+  const follow = useRef(true);
+  const lastTop = useRef(0);
 
   useEffect(() => {
     if (!streaming && !defaultOpen) setOpen(false);
   }, [streaming, defaultOpen]);
+
+  // The streaming view is capped at max-h-80, so later reasoning would otherwise accumulate
+  // below the fold. Keep the newest text visible until the reader scrolls back through it.
+  useLayoutEffect(() => {
+    const el = body.current;
+    if (!el || !open || !streaming || !follow.current) return;
+    el.scrollTop = el.scrollHeight;
+    // Scroll events arrive asynchronously, after this function has returned.
+    lastTop.current = Math.max(0, el.scrollTop);
+  }, [text, open, streaming]);
+
+  useEffect(() => {
+    const el = body.current;
+    if (!el || !open) return;
+    const onScroll = () => {
+      const top = Math.max(0, el.scrollTop);
+      const delta = top - lastTop.current;
+      if (delta < 0) follow.current = false;
+      else if (delta > 0) follow.current = el.scrollHeight - top - el.clientHeight < 24;
+      lastTop.current = top;
+    };
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY < 0) follow.current = false;
+    };
+    let touchY: number | undefined;
+    const onTouchStart = (event: TouchEvent) => { touchY = event.touches[0]?.clientY; };
+    const onTouchMove = (event: TouchEvent) => {
+      const nextY = event.touches[0]?.clientY;
+      if (nextY !== undefined && touchY !== undefined && nextY > touchY) follow.current = false;
+      touchY = nextY;
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    el.addEventListener('wheel', onWheel, { passive: true });
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+    };
+  }, [open]);
 
   if (!text.trim() && !streaming) return null;
 
@@ -24,7 +69,10 @@ export function ThinkingBlock({ text, streaming, defaultOpen = false }: { text: 
     >
       <button
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          if (!open) follow.current = true;
+          setOpen(!open);
+        }}
         className="flex w-full items-center gap-2 px-3.5 py-2.5 text-xs text-zinc-600 dark:text-zinc-400 transition-colors hover:text-zinc-900 dark:hover:text-zinc-200"
       >
         <div
@@ -48,7 +96,7 @@ export function ThinkingBlock({ text, streaming, defaultOpen = false }: { text: 
         />
       </button>
       {open && (
-        <div className="max-h-80 overflow-y-auto border-t border-zinc-200/70 dark:border-zinc-800 px-4 py-3 text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-300 [&_.prose-chat]:text-[13px] [&_.prose-chat]:leading-6">
+        <div ref={body} data-thinking-body className="max-h-80 overflow-y-auto border-t border-zinc-200/70 dark:border-zinc-800 px-4 py-3 text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-300 [&_.prose-chat]:text-[13px] [&_.prose-chat]:leading-6">
           {text ? <Markdown text={text} live={streaming} /> : <span className="italic text-zinc-400">(no visible content)</span>}
         </div>
       )}

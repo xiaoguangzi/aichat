@@ -152,6 +152,23 @@ describe('message scroll following', () => {
     expect(el.scrollTop).toBe(0);
   });
 
+  it('keeps following when content above the viewport collapses at the bottom', async () => {
+    const el = await mount(1000);
+    el.dispatchEvent(new Event('scroll'));
+    height = 1200;
+    await streamUpdate();
+    expect(el.scrollTop).toBe(700);
+
+    // A collapsed disclosure above the viewport shrinks the list; the browser clamps
+    // scrollTop and fires a scroll event that must not read as an upward gesture.
+    height = 600;
+    el.scrollTop = el.scrollTop;
+    el.dispatchEvent(new Event('scroll'));
+    height = 1500;
+    await streamUpdate();
+    expect(el.scrollTop).toBe(1000);
+  });
+
   it('follows growth and resumes when the reader scrolls down to the bottom', async () => {
     const el = await mount(1000);
     el.dispatchEvent(new Event('scroll')); // delayed programmatic event
