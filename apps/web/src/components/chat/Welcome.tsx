@@ -1,10 +1,10 @@
 import { ArrowUpRight, Code2, FilePenLine, Lightbulb, Sprout } from 'lucide-react';
 
 const suggestions = [
-  { icon: Code2, title: '编程与开发', description: '理清思路，让复杂的问题简单一点', prompt: '帮我分析一个编程问题：', tone: 'blue' },
-  { icon: FilePenLine, title: '分析与写作', description: '整理信息，找到清晰有力的表达', prompt: '帮我梳理下面的内容，提炼重点：', tone: 'sky' },
-  { icon: Lightbulb, title: '学习与探索', description: '从一个好问题，开启新的发现', prompt: '我想学习一个新知识，请循序渐进地为我讲解：', tone: 'indigo' },
-  { icon: Sprout, title: '灵感与日常', description: '留一点空间，给生活里的新想法', prompt: '和我一起头脑风暴，探索一些新的想法：', tone: 'cyan' },
+  { icon: Code2, title: '编程与开发', description: '理清思路，让复杂的问题简单一点', prompt: '帮我分析一个编程问题：', tone: 'clay' },
+  { icon: FilePenLine, title: '分析与写作', description: '整理信息，找到清晰有力的表达', prompt: '帮我梳理下面的内容，提炼重点：', tone: 'sage' },
+  { icon: Lightbulb, title: '学习与探索', description: '从一个好问题，开启新的发现', prompt: '我想学习一个新知识，请循序渐进地为我讲解：', tone: 'ochre' },
+  { icon: Sprout, title: '灵感与日常', description: '留一点空间，给生活里的新想法', prompt: '和我一起头脑风暴，探索一些新的想法：', tone: 'plum' },
 ];
 const interactiveSuggestions = [
   { label: '聚餐分账', prompt: '请用智能 UI 做一个聚餐分账器：账单 240 元、4 个人，可以调整人数和小费比例，实时显示人均金额。' },

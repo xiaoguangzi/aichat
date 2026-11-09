@@ -51,7 +51,7 @@ export function ArtifactPanel({ artifact, versions, loadError, onSelect, onClose
     const a = document.createElement('a'); a.href = url; a.download = `${artifact.title.replace(/[^\p{L}\p{N}._-]/gu, '-').slice(0, 80)}.${ext.replace(/[^a-z0-9]/gi, '')}`; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-  return <aside ref={resize.panelRef} style={resize.style} aria-label="Artifact 工作区" className={cn('flex flex-col border-l border-zinc-200 bg-white dark:border-zinc-800 dark:bg-[#101116]',
+  return <aside ref={resize.panelRef} style={resize.style} aria-label="Artifact 工作区" className={cn('flex flex-col border-l border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950',
     full ? 'fixed inset-0 z-50' : 'fixed inset-0 z-40 lg:relative lg:inset-auto lg:z-auto lg:w-[var(--artifact-panel-width)] lg:min-w-0 lg:shrink-0')}>
     {!full && <div {...resize.separatorProps} className="group absolute inset-y-0 -left-1.5 z-30 hidden w-3 touch-none cursor-col-resize items-center justify-center outline-none lg:flex">
       <span className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-transparent transition-colors group-hover:bg-accent-400 group-focus-visible:bg-accent-500" />
@@ -78,7 +78,7 @@ export function ArtifactPanel({ artifact, versions, loadError, onSelect, onClose
         {editing ? <div><button disabled={saving} className={btn} onClick={() => { setEditing(false); setError(''); }}>取消编辑</button><button disabled={!dirty || saving} className={btn} onClick={async () => { setSaving(true); setError(''); try { await onSave(draft); } catch (e) { setError(String(e)); } finally { setSaving(false); } }}>{saving ? '保存中…' : '保存新版本'}</button></div>
           : <button disabled={!artifact.complete} className={btn} onClick={() => { setDraft(artifact.code); setEditing(true); }}>编辑源码</button>}
       </div>
-      <textarea aria-label="作品源码" spellCheck={false} readOnly={!editing} value={source} onChange={e => setDraft(e.target.value)} className="min-h-0 flex-1 resize-none border-0 bg-[#0d1117] p-4 font-mono text-xs leading-6 text-zinc-200 outline-none" />
+      <textarea aria-label="作品源码" spellCheck={false} readOnly={!editing} value={source} onChange={e => setDraft(e.target.value)} className="chat-code min-h-0 flex-1 resize-none border-0 p-4 font-mono text-xs leading-6 outline-none" />
     </div> : <>
       <div className="flex items-center justify-between px-3 py-1 text-xs text-zinc-500"><button className={btn} onClick={() => setMobile(!mobile)}>{mobile ? '手机宽度 · 375px' : '自适应宽度'}</button><button className={btn} title="重新运行" onClick={() => setRun(run + 1)}><RefreshCw size={14} /></button></div>
       <div className="flex min-h-0 flex-1 justify-center overflow-auto bg-zinc-100 p-2 dark:bg-zinc-950">

@@ -89,7 +89,7 @@ export const MessageItem = memo(function MessageItem({ message, streaming, resul
             </div>
           ) : (
             plain && (
-              <div className="whitespace-pre-wrap rounded-2xl rounded-br-sm bg-accent-100 dark:bg-[#1a293c] px-4 py-2.5 text-[15px] leading-7 text-accent-950 dark:text-[#dce9f8] shadow-2xs break-words selection:bg-accent-200 selection:text-accent-950 dark:selection:bg-accent-800 dark:selection:text-accent-100">
+              <div className="whitespace-pre-wrap rounded-2xl rounded-br-sm bg-accent-100 dark:bg-accent-950 px-4 py-2.5 text-[15px] leading-7 text-accent-900 dark:text-accent-100 shadow-2xs break-words selection:bg-accent-200 selection:text-accent-950 dark:selection:bg-accent-800 dark:selection:text-accent-100">
                 {plain}
               </div>
             )

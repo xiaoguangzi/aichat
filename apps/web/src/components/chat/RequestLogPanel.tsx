@@ -71,7 +71,7 @@ export function RequestLogPanel({ conversationId, onClose }: { conversationId: s
   const total = records.reduce((sum, r) => sum + r.durationMs, 0);
 
   return (
-    <aside aria-label="请求日志" className="request-log-panel z-10 flex h-full w-[32rem] max-w-full shrink-0 flex-col border-l border-zinc-200/80 bg-white/95 text-sm shadow-xl backdrop-blur-md dark:border-zinc-800/80 dark:bg-[#0c0d14]/95">
+    <aside aria-label="请求日志" className="request-log-panel z-10 flex h-full w-[32rem] max-w-full shrink-0 flex-col border-l border-zinc-200/80 bg-white/95 text-sm shadow-xl backdrop-blur-md dark:border-zinc-800/80 dark:bg-zinc-950/95">
       <div className="flex items-center gap-2 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800/80">
         <Activity size={15} className="text-accent-500" />
         <span className="font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">请求日志</span>

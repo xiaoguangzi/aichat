@@ -31,7 +31,7 @@ function Pre({ children }: { children?: ReactNode }) {
       >
         {ok ? <Check size={14} /> : <Copy size={14} />}
       </button>
-      <pre className="bg-[#0d1117] text-zinc-100">{children}</pre>
+      <pre className="chat-code">{children}</pre>
     </div>
   );
 }

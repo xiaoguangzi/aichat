@@ -51,7 +51,7 @@ export function ConversationSettingsPanel({ onClose }: { onClose: () => void }) 
   };
 
   return (
-    <div className="flex h-full w-84 shrink-0 flex-col border-l border-zinc-200/80 dark:border-zinc-800/80 bg-white/95 dark:bg-[#0c0d14]/95 backdrop-blur-md p-5 text-sm z-10 shadow-xl">
+    <div className="flex h-full w-84 shrink-0 flex-col border-l border-zinc-200/80 dark:border-zinc-800/80 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md p-5 text-sm z-10 shadow-xl">
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
           <SlidersHorizontal size={15} className="text-accent-500" />

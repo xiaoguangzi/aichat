@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <style>
-    .fg { fill: #09090b; }
-    @media (prefers-color-scheme: dark) { .fg { fill: #f4f4f5; } }
+    .fg { fill: #1f1e19; }
+    @media (prefers-color-scheme: dark) { .fg { fill: #f2efe6; } }
   </style>
   <defs>
     <clipPath id="bubble">
