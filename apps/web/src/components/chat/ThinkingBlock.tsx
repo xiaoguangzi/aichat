@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Brain, ChevronDown } from 'lucide-react';
 import { Markdown } from '../ui/Markdown';
+import { Collapse } from '../ui/Collapse.js';
 import { cn } from '../../lib/utils';
 
 /** `defaultOpen` keeps short summaries readable once their collapsed process is expanded. */
@@ -9,6 +10,8 @@ export function ThinkingBlock({ text, streaming, defaultOpen = false }: { text: 
   const body = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const lastTop = useRef(0);
+  // Only a block that started while it was being written arrives with motion; history just is.
+  const [arrived] = useState(streaming);
 
   useEffect(() => {
     if (!streaming && !defaultOpen) setOpen(false);
@@ -61,7 +64,8 @@ export function ThinkingBlock({ text, streaming, defaultOpen = false }: { text: 
   return (
     <div
       className={cn(
-        'my-2.5 rounded-2xl border text-sm transition-all duration-200 overflow-hidden',
+        'thinking-block my-2.5 rounded-2xl border text-sm overflow-hidden',
+        arrived && 'block-enter',
         streaming
           ? 'border-accent-400/50 dark:border-accent-700/50 bg-accent-50/40 dark:bg-accent-950/20 shadow-xs'
           : 'border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/70 dark:bg-zinc-900/40',
@@ -86,20 +90,19 @@ export function ThinkingBlock({ text, streaming, defaultOpen = false }: { text: 
           <Brain size={12} className={cn(streaming && 'pulse-dot')} />
         </div>
         <span className="font-medium">{streaming ? 'Thinking…' : 'Thought process'}</span>
-        {streaming && <span className="pulse-dot text-accent-500">···</span>}
         <span className="ml-auto text-[11px] text-zinc-400">
           {open ? 'Hide' : 'Show'}
         </span>
         <ChevronDown
           size={13}
-          className={cn('text-zinc-400 transition-transform duration-200', open && 'rotate-180')}
+          className={cn('chevron text-zinc-400', open && 'rotate-180')}
         />
       </button>
-      {open && (
+      <Collapse open={open}>
         <div ref={body} data-thinking-body className="max-h-80 overflow-y-auto border-t border-zinc-200/70 dark:border-zinc-800 px-4 py-3 text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-300 [&_.prose-chat]:text-[13px] [&_.prose-chat]:leading-6">
           {text ? <Markdown text={text} live={streaming} /> : <span className="italic text-zinc-400">(no visible content)</span>}
         </div>
-      )}
+      </Collapse>
     </div>
   );
 }

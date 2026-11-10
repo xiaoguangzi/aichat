@@ -29,6 +29,11 @@ export function Composer({ quote, starter }: { quote?: { text: string; conversat
   const [slashIdx, setSlashIdx] = useState(0);
   const ta = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Send and stop trade places with a small pop, but only when a run starts or ends in front of
+  // the reader: the composer remounts with every conversation and should not announce itself.
+  const mountedRunning = useRef(running);
+  const swapped = useRef(false);
+  if (running !== mountedRunning.current) swapped.current = true;
 
   const context = useChat((s) => s.context);
   const activeModelId = current?.modelId ?? draftModelId;
@@ -230,9 +235,10 @@ export function Composer({ quote, starter }: { quote?: { text: string; conversat
             {/* Submit / Stop button */}
             {running ? (
               <button
+                key="stop"
                 type="button"
                 onClick={() => void stop()}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-900 dark:bg-zinc-100 px-3 py-1.5 text-xs font-medium text-white dark:text-zinc-900 transition-all hover:bg-zinc-800 dark:hover:bg-white active:scale-95 shadow-xs"
+                className={cn(swapped.current && 'control-swap', 'inline-flex items-center gap-1.5 rounded-xl bg-zinc-900 dark:bg-zinc-100 px-3 py-1.5 text-xs font-medium text-white dark:text-zinc-900 transition-all hover:bg-zinc-800 dark:hover:bg-white active:scale-95 shadow-xs')}
                 title="Stop generation"
               >
                 <Square size={13} className="fill-current" />
@@ -240,10 +246,12 @@ export function Composer({ quote, starter }: { quote?: { text: string; conversat
               </button>
             ) : (
               <button
+                key="send"
                 type="button"
                 onClick={() => void submit()}
                 disabled={!canSubmit}
                 className={cn(
+                  swapped.current && 'control-swap',
                   'inline-flex items-center justify-center rounded-xl p-2 text-white shadow-xs transition-all duration-150',
                   canSubmit
                     ? 'bg-gradient-to-tr from-accent-600 to-accent-400 hover:from-accent-500 hover:to-accent-400 text-white shadow-sm shadow-accent-600/20 active:scale-95'

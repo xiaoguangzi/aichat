@@ -1,22 +1,33 @@
-import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { cn } from '../../lib/utils';
+import { loopPhase } from '../../lib/motion.js';
 
-/** Below this the wait reads as normal latency and a bare caret is enough. */
+/** Below this the wait reads as normal latency and the breathing mark is enough. */
 const SHOW_TIMER_AFTER = 3;
 /** Past this the gateway is queueing us, not thinking — say so instead of looking hung. */
 const SLOW_AFTER = 12;
 
+/** The mark that stands for "the model is at work": waiting and thinking. */
+export function PresenceDot({ className }: { className?: string }) {
+  const [phase] = useState(() => loopPhase(1600));
+  return <span aria-hidden className={cn('presence-dot', className)} style={{ '--phase': phase } as CSSProperties} />;
+}
+
 /**
- * Shown on a streaming assistant message that has no content yet.
+ * Shown from the moment a run starts until its first output.
  *
- * `message_start` reaches the browser ~2ms after send, but a gateway can then sit on the
- * upstream request for 10-20s without emitting a single byte, so there is nothing to render
- * in between. A blinking caret alone makes that stretch look like a hang; an elapsed counter
- * makes the wait legible and keeps it distinguishable from a dead stream.
+ * `message_start` reaches the browser a few milliseconds after send, but a gateway can then sit
+ * on the upstream request for 10-20s without emitting a single byte, so there is nothing to
+ * render in between. An elapsed counter makes that stretch legible and keeps it distinguishable
+ * from a dead stream.
+ *
+ * The list shows this as a placeholder before the reply exists and the reply shows it again
+ * until it has content. Both pass the same `since`, and the entrance is timed from it, so the
+ * handoff between the two mounts is not visible.
  */
 export function PendingIndicator({ since }: { since: number }) {
   const [secs, setSecs] = useState(() => elapsed(since));
+  const [style] = useState(() => ({ '--since': `-${Math.max(0, Date.now() - since)}ms` }) as CSSProperties);
 
   useEffect(() => {
     setSecs(elapsed(since));
@@ -27,18 +38,11 @@ export function PendingIndicator({ since }: { since: number }) {
   const slow = secs >= SLOW_AFTER;
 
   return (
-    <div
-      className={cn(
-        'msg-settle my-2.5 inline-flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-xs transition-colors duration-300',
-        slow
-          ? 'border-accent-300/60 dark:border-accent-800/50 bg-accent-50/60 dark:bg-accent-950/20 text-accent-700 dark:text-accent-300'
-          : 'border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/70 dark:bg-zinc-900/40 text-zinc-600 dark:text-zinc-400',
-      )}
-    >
-      <Loader2 size={13} className="animate-spin" />
+    <div className={cn('presence', slow && 'is-slow')} style={style} role="status">
+      <PresenceDot />
       <span className="font-medium">Waiting for the model…</span>
-      {secs >= SHOW_TIMER_AFTER && <span className="font-mono tabular-nums opacity-70">{secs}s</span>}
-      {slow && <span className="opacity-80">· provider is slow to respond</span>}
+      {secs >= SHOW_TIMER_AFTER && <span className="presence-meta font-mono tabular-nums">{secs}s</span>}
+      {slow && <span className="presence-meta">· provider is slow to respond</span>}
     </div>
   );
 }

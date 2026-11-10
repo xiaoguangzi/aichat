@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ToolResultBlock, ToolUseBlock } from '@aichat/shared';
 import { AlertTriangle, Check, ChevronDown, Copy, Loader2, Terminal, Wrench } from 'lucide-react';
 import { cn, copyText } from '../../lib/utils';
+import { Collapse } from '../ui/Collapse.js';
 
 export function ToolCallCard({ call, result }: { call: ToolUseBlock; result?: ToolResultBlock }) {
   const [open, setOpen] = useState(false);
@@ -9,6 +10,9 @@ export function ToolCallCard({ call, result }: { call: ToolUseBlock; result?: To
   const [copiedResult, setCopiedResult] = useState(false);
 
   const pending = !result;
+  // A call that appears while it is still running arrives with motion, and its outcome pops in
+  // when it lands. Cards restored from history do neither.
+  const [arrived] = useState(pending);
   const isError = result?.is_error === true;
   const isMcp = call.name.startsWith('mcp__');
 
@@ -20,7 +24,8 @@ export function ToolCallCard({ call, result }: { call: ToolUseBlock; result?: To
   return (
     <div
       className={cn(
-        'card my-2.5 overflow-hidden text-sm transition-all duration-150',
+        'card my-2.5 overflow-hidden text-sm',
+        arrived && 'block-enter',
         isError ? 'border-red-300 dark:border-red-900/80' : 'border-zinc-200/80 dark:border-zinc-800/80',
       )}
     >
@@ -48,24 +53,24 @@ export function ToolCallCard({ call, result }: { call: ToolUseBlock; result?: To
               <span>Running</span>
             </span>
           ) : isError ? (
-            <span className="flex items-center gap-1 text-red-500 font-medium">
+            <span className={cn('flex items-center gap-1 text-red-500 font-medium', arrived && 'status-in')}>
               <AlertTriangle size={12} />
               <span>Failed</span>
             </span>
           ) : (
-            <span className="flex items-center gap-1 text-accent-600 dark:text-accent-400 font-medium">
+            <span className={cn('flex items-center gap-1 text-accent-600 dark:text-accent-400 font-medium', arrived && 'status-in')}>
               <span className="h-1.5 w-1.5 rounded-full bg-accent-500" />
               <span>Done</span>
             </span>
           )}
           <ChevronDown
             size={13}
-            className={cn('text-zinc-400 transition-transform duration-150', open && 'rotate-180')}
+            className={cn('chevron text-zinc-400', open && 'rotate-180')}
           />
         </span>
       </button>
 
-      {open && (
+      <Collapse open={open}>
         <div className="border-t border-zinc-100 dark:border-zinc-800/90 bg-white dark:bg-zinc-950/40 text-xs">
           {/* Input section */}
           <div className="p-3">
@@ -134,7 +139,7 @@ export function ToolCallCard({ call, result }: { call: ToolUseBlock; result?: To
             </div>
           )}
         </div>
-      )}
+      </Collapse>
     </div>
   );
 }

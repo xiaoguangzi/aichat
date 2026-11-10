@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import type { Message, ToolResultBlock, Usage } from '@aichat/shared';
 import { Check, ChevronLeft, ChevronRight, ChevronsRight, Copy, Pencil, RefreshCw, FileText, AlertCircle } from 'lucide-react';
 import { ArtifactMessage } from '../artifacts/ArtifactMessage.js';
@@ -36,10 +36,15 @@ interface Props {
   onSwitchBranch?: (messageId: string) => void;
   /** Keep generating from this reply; offered when it stopped at the length limit. */
   onContinue?: (messageId: string) => void;
+  /** When the wait for this reply began, if that was before the message itself existed. */
+  pendingSince?: number;
 }
 
-export const MessageItem = memo(function MessageItem({ message, streaming, results, onRegenerate, onEdit, isLastAssistant, hideProcess, textStartIndex = 0, showFooter = true, footerUsage, footerText, modelSwitch, onSwitchBranch, onContinue }: Props) {
+export const MessageItem = memo(function MessageItem({ message, streaming, results, onRegenerate, onEdit, isLastAssistant, hideProcess, textStartIndex = 0, showFooter = true, footerUsage, footerText, modelSwitch, onSwitchBranch, onContinue, pendingSince }: Props) {
   const [copied, setCopied] = useState(false);
+  // The footer settles in after a reply that was written in front of the reader; history just has it.
+  const streamed = useRef(false);
+  if (streaming) streamed.current = true;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const isUser = message.role === 'user';
@@ -120,7 +125,7 @@ export const MessageItem = memo(function MessageItem({ message, streaming, resul
               if (i < textStartIndex) return null;
               const live = !!streaming && i === message.content.length - 1;
               return (
-                <div key={i} className={cn(live && 'cursor-blink')}>
+                <div key={i}>
                   <ArtifactMessage text={b.text} live={live} messageId={message.id} block={i} />
                 </div>
               );
@@ -131,7 +136,7 @@ export const MessageItem = memo(function MessageItem({ message, streaming, resul
               return null;
           }
         })}
-        {streaming && message.content.length === 0 && <PendingIndicator since={Date.parse(message.createdAt)} />}
+        {streaming && message.content.length === 0 && <PendingIndicator since={waitingSince(message.createdAt, pendingSince)} />}
         {message.stopReason === 'interrupted' && (
           <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-accent-50 dark:bg-accent-950/30 px-2 py-1 text-xs text-accent-700 dark:text-accent-300">
             <AlertCircle size={13} /> Interrupted
@@ -149,7 +154,7 @@ export const MessageItem = memo(function MessageItem({ message, streaming, resul
         )}
         <VariantSwitcher message={message} onSwitchBranch={onSwitchBranch} align="left" />
         {!streaming && showFooter && (
-          <div className="msg-settle mt-2 flex flex-wrap items-center gap-1 text-xs text-zinc-400">
+          <div className={cn('mt-2 flex flex-wrap items-center gap-1 text-xs text-zinc-400', streamed.current && 'footer-settle')}>
             {message.model && modelSwitch && <span
               title={`本轮由 ${message.model.label} 生成，上一轮是 ${modelSwitch}${message.model.id ? '' : '。该模型已从模型服务中删除'}`}
               className="mr-1 max-w-56 truncate rounded px-1.5 py-0.5 text-[11px] text-zinc-500 bg-zinc-100 dark:bg-zinc-800/80 dark:text-zinc-400"
@@ -185,6 +190,12 @@ export const MessageItem = memo(function MessageItem({ message, streaming, resul
     </div>
   );
 });
+
+/** The wait began at send; a restored stream only knows when its message was created. */
+function waitingSince(createdAt: string, sent?: number): number {
+  const created = Date.parse(createdAt);
+  return sent != null && !(created < sent) ? sent : created;
+}
 
 /**
  * ‹ n/m › between variants at one position. Rendered only where the server reported siblings, which

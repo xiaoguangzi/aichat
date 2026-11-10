@@ -9,9 +9,13 @@ import { Sparkles } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { flushSync } from 'react-dom';
 import { MessageNavigation } from './MessageNavigation.js';
+import { PendingIndicator } from './PendingIndicator.js';
+import { canAnimate, EASE_OUT } from '../../lib/motion.js';
 
 /** turns mounted synchronously on a conversation switch; the rest streams in right after */
 const TAIL = 12;
+/** Furthest the list travels when it makes room for a sent message. */
+const SLIDE_MAX = 640;
 
 export function MessageList() {
   const messages = useChat((s) => s.messages);
@@ -27,6 +31,8 @@ export function MessageList() {
   const ref = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const lastScrollTop = useRef(0);
+  /** When the current run was first seen running here; 0 while idle. */
+  const runStarted = useRef(0);
 
   // a stream belonging to another conversation must not bleed into this one
   const liveStreaming = streaming && streaming.conversationId === currentId ? streaming : null;
@@ -81,24 +87,30 @@ export function MessageList() {
   const onProcessToggle = useCallback(() => { stick.current = false; }, []);
 
   const inner = useRef<HTMLDivElement>(null);
-  // Entry animation for a genuinely new turn (sent message / new reply), kicked from the wrapper's
-  // mount ref so it is safe under StrictMode's double render. `known` (updated post-commit) holds
-  // the stable keys of turns already on screen; a turn animates only when it is new, is the last
-  // one, and belongs to the conversation being viewed. That excludes history loads, the background
-  // tail→full fill, conversation switches, and bulk replacements like branch switching. `animated`
-  // makes the animation one-shot even though the inline ref re-fires on every render.
+  // Entry animation for a sent message, kicked from the wrapper's mount ref so it is safe under
+  // StrictMode's double render. `known` (updated post-commit) holds the stable keys of turns
+  // already on screen; a turn animates only when it is new, is the last one, and belongs to the
+  // conversation being viewed. That excludes history loads, the background tail→full fill,
+  // conversation switches, and bulk replacements like branch switching. `animated` makes the
+  // animation one-shot even though the inline ref re-fires on every render.
+  //
+  // Only the reader's own message enters as a block. A reply never does: its waiting mark, its
+  // process and its text each arrive with their own motion, in the place they will stay.
   const known = useRef<{ conv: string | null | undefined; keys: Set<string> }>({ conv: undefined, keys: new Set() });
   const animated = useRef(new Set<string>());
+  /** A message was sent in the commit being laid out; the list makes room for it (see below). */
+  const sent = useRef(false);
   useEffect(() => {
     known.current = { conv: currentId, keys: new Set(groups.map((t) => turnKeys.get(t[0]!.id)!)) };
   }, [groups, currentId, turnKeys]);
   const turnRef = useCallback((node: HTMLDivElement | null, id: string, role: string, key: string, isLast: boolean) => {
     if (role === 'user') { if (node) anchors.current.set(id, node); else anchors.current.delete(id); }
-    if (!node || !isLast) return;
+    if (!node || !isLast || role !== 'user') return;
     const k = known.current;
     if (k.conv === currentId && !k.keys.has(key) && !animated.current.has(key)) {
       animated.current.add(key);
-      node.classList.add('msg-enter');
+      node.classList.add('turn-enter');
+      sent.current = true;
     }
   }, [currentId]);
   const pin = useCallback(() => {
@@ -174,6 +186,7 @@ export function MessageList() {
     const fromDraft = prevConv.current == null;
     prevConv.current = currentId;
     stick.current = true;
+    runStarted.current = 0;
     // Opening a conversation mounts its history before the post-commit effect records it; a
     // sentinel conv keeps those refs from animating. Exception: the first send from the draft
     // creates the conversation and the optimistic message in one commit — that lone turn is a
@@ -241,8 +254,26 @@ export function MessageList() {
     // the previous reply must not carry over; pauses within this turn still do.
     if (running && !wasRunning.current) stick.current = true;
     wasRunning.current = running;
+    const el = ref.current;
+    const before = el?.scrollTop ?? 0;
     pin();
+    // Pinning moves the whole conversation up by the height of what was just sent, in one frame.
+    // Replay that distance as motion so the earlier messages are seen making room and the new
+    // one rises out of the composer. A jump from far up the history is left as a jump.
+    if (!sent.current) return;
+    sent.current = false;
+    const shift = el ? el.scrollTop - before : 0;
+    if (shift > 0 && shift <= SLIDE_MAX && canAnimate(inner.current)) {
+      inner.current.animate([{ transform: `translateY(${shift}px)` }, { transform: 'translateY(0)' }], { duration: 460, easing: EASE_OUT });
+    }
   }, [rendered, liveStreaming, currentId, running, pin]);
+
+  // The wait starts at send, before the reply exists (routing, a slow gateway). Showing the
+  // waiting mark from that moment, in the spot the reply will take, means the reply's arrival
+  // changes nothing on screen. Tool loops and continuations already have a turn to report in.
+  if (running && !runStarted.current) runStarted.current = Date.now();
+  if (!running) runStarted.current = 0;
+  const awaitingReply = running && !liveStreaming && groups.at(-1)?.[0]?.role === 'user';
 
   return (
     <div className="message-list-shell relative flex min-h-0 flex-1">
@@ -283,9 +314,9 @@ export function MessageList() {
             const active = running && turn === groups.at(-1);
             const key = turnKeys.get(first.id)!;
             return (
-              // msg-enter joins the className once animated: later renders (e.g. `active` flipping)
+              // turn-enter joins the className once animated: later renders (e.g. `active` flipping)
               // rewrite the class attribute, which would strip an externally-added class mid-animation.
-              <div key={key} className={cn(!active && 'msg-item', first.role === 'user' && 'message-anchor', animated.current.has(key) && 'msg-enter')}
+              <div key={key} className={cn(!active && 'msg-item', first.role === 'user' && 'message-anchor', animated.current.has(key) && 'turn-enter')}
                 data-user-message-id={first.role === 'user' ? first.id : undefined}
                 ref={(node) => turnRef(node, first.id, first.role, key, turnIndex === rendered.length - 1)}>
                 {first.role === 'assistant' ? <AssistantTurn
@@ -299,10 +330,12 @@ export function MessageList() {
                   modelSwitch={modelSwitches.switching.has(first.id) ? modelSwitches.previousLabel.get(first.id) : undefined}
                   onSwitchBranch={!running ? onSwitchBranch : undefined}
                   onContinue={!running ? onContinue : undefined}
+                  pendingSince={active && runStarted.current ? runStarted.current : undefined}
                 /> : <MessageItem message={first} results={results} onEdit={!running ? onEdit : undefined} onSwitchBranch={!running ? onSwitchBranch : undefined} />}
               </div>
             );
           })}
+          {awaitingReply && <div><PendingIndicator since={runStarted.current} /></div>}
         </div>
       </div>
       <MessageNavigation key={currentId ?? 'draft'} messages={questions} scrollRef={ref} onJump={jumpToMessage} />

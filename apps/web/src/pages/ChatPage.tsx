@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { SlidersHorizontal, Download, X, Folder, FolderInput, PanelLeft, Activity, Search } from 'lucide-react';
 import { useChat } from '../store/chat';
@@ -17,6 +18,7 @@ import { ArtifactWorkspace, useArtifacts } from '../components/artifacts/Artifac
 import { api } from '../api/client';
 import { Welcome, StarterCards } from '../components/chat/Welcome.js';
 import { cn } from '../lib/utils';
+import { motionOK } from '../lib/motion.js';
 
 export function ChatPage() {
   const [searchOpen, setSearchOpen] = useState(false);
@@ -33,7 +35,7 @@ export function ChatPage() {
   const messages = useChat((s) => s.messages);
   const [starter, setStarter] = useState<{ text: string } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const landing = !current && messages.length === 0;
+  const landing = useLayoutTransition(!current && messages.length === 0);
   const [showSettings, setShowSettings] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [groupMenuAt, setGroupMenuAt] = useState<DOMRect | null>(null);
@@ -195,6 +197,34 @@ export function ChatPage() {
       </div>
     </div>
   );
+}
+
+/**
+ * The landing screen and a conversation are two layouts of the same page: the composer sits
+ * mid-page in one and at the bottom in the other. Switching between them as a view transition
+ * lets the composer travel to its new place while the rest cross-fades, instead of the whole
+ * page being swapped under the message that was just sent.
+ *
+ * The returned flag trails `value` by one frame while the browser captures the outgoing layout.
+ * Without the API, or with reduced motion, it is simply `value`.
+ */
+function useLayoutTransition(value: boolean): boolean {
+  const [shown, setShown] = useState(value);
+  const latest = useRef(value);
+  latest.current = value;
+  const supported = typeof document !== 'undefined' && typeof document.startViewTransition === 'function';
+  useLayoutEffect(() => {
+    if (shown === value) return;
+    if (!supported || !motionOK()) {
+      setShown(value);
+      return;
+    }
+    const transition = document.startViewTransition(() => flushSync(() => setShown(latest.current)));
+    // A hidden tab or a newer transition skips this one; the layout change itself still applies.
+    transition.ready.catch(() => {});
+    transition.finished.catch(() => {});
+  }, [value, shown, supported]);
+  return supported ? shown : value;
 }
 
 function ArtifactPicker() {

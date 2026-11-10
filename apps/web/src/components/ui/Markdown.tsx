@@ -1,4 +1,4 @@
-import { memo, useState, type ReactNode } from 'react';
+import { memo, useMemo, useState, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -7,6 +7,7 @@ import rehypeKatex from 'rehype-katex';
 import { Check, Copy } from 'lucide-react';
 import { copyText } from '../../lib/utils';
 import { normalizeMath } from '../../lib/math';
+import { CutTracker } from '../../lib/markdown-split.js';
 import 'katex/dist/katex.min.css';
 
 function Pre({ children }: { children?: ReactNode }) {
@@ -59,27 +60,52 @@ const CACHE_MAX = 400;
 function render(text: string): ReactNode {
   return (
     <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components}>
-      {normalizeMath(text)}
+      {text}
     </ReactMarkdown>
   );
 }
 
-export const Markdown = memo(function Markdown({ text, live }: { text: string; live?: boolean }) {
-  let body: ReactNode;
-  if (live) {
-    body = render(text);
-  } else {
-    const hit = cache.get(text);
-    if (hit !== undefined) {
-      // refresh LRU position
-      cache.delete(text);
-      cache.set(text, hit);
-      body = hit;
-    } else {
-      body = render(text);
-      cache.set(text, body);
-      while (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value!);
-    }
+function cached(text: string): ReactNode {
+  const hit = cache.get(text);
+  if (hit !== undefined) {
+    // refresh LRU position
+    cache.delete(text);
+    cache.set(text, hit);
+    return hit;
   }
-  return <div className="prose-chat">{body}</div>;
+  const body = render(normalizeMath(text));
+  cache.set(text, body);
+  while (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value!);
+  return body;
+}
+
+/** One independently parsed block of a streaming reply; a block that has stopped changing never re-renders. */
+const Block = memo(function Block({ text }: { text: string }) {
+  return useMemo(() => render(normalizeMath(text)), [text]);
+});
+
+/**
+ * Streaming markdown: text is shown as it arrives. Settled blocks are parsed once and only the
+ * tail is re-parsed as it grows.
+ */
+function LiveMarkdown({ text }: { text: string }) {
+  const [tracker] = useState(() => new CutTracker());
+  const bounds = [0, ...tracker.update(text), text.length];
+  return (
+    <div className="prose-chat">
+      {bounds.slice(0, -1).map((start, index) => (
+        <Block key={start} text={text.slice(start, bounds[index + 1]!)} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * `live` text is rendered block-wise while it streams. Once the stream ends the reply is
+ * re-rendered whole from the cache: that is the canonical rendering, and the one every later
+ * visit to the conversation shows.
+ */
+export const Markdown = memo(function Markdown({ text, live }: { text: string; live?: boolean }) {
+  if (live) return <LiveMarkdown text={text} />;
+  return <div className="prose-chat">{cached(text)}</div>;
 });

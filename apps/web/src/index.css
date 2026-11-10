@@ -76,30 +76,85 @@ body {
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* A new turn settles into place: a slightly longer, softer rise than the generic fade-in.
-   Applied once on genuine arrival (see MessageList), never on history fill or stream handoff. */
-.msg-enter { animation: msg-enter 0.32s cubic-bezier(0.16, 1, 0.3, 1) both; }
-@keyframes msg-enter {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* The reply footer (usage / timing / actions) appears as the stream settles. */
-.msg-settle { animation: fade-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both; }
-
 /* skip layout/paint for offscreen messages — big win when switching long conversations */
 .msg-item { content-visibility: auto; contain-intrinsic-size: auto 120px; }
 
-/* streaming caret + pulsing dot */
-@keyframes blink { 50% { opacity: 0; } }
-.cursor-blink::after {
-  content: '▍';
-  animation: blink 1s step-end infinite;
-  @apply text-accent-500 font-mono ml-0.5;
-}
-
 @keyframes pulse-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.95); } }
 .pulse-dot { animation: pulse-dot 1.4s ease-in-out infinite; }
+
+/* ---------- conversation motion ----------
+   One vocabulary for everything that moves while a message is sent and answered.
+
+   - What you send rises out of the composer and the conversation makes room for it.
+   - What the model writes appears where it will stay: text shows as it arrives, blocks settle
+     with a short rise, nothing slides across the page.
+   - One mark, an accent dot, stands for "the model is at work" while there is nothing to read
+     yet: beside the waiting line and in the process header. Text being written carries no mark.
+   - Arrival is animated, history is not. Entrances use `backwards` fill so no transform is
+     left behind on settled content.
+   JS-driven motion (WAAPI) reads the same curves from lib/motion.ts. */
+:root {
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  /* damped spring, ~4% overshoot, settled by 70% */
+  --ease-spring: linear(0, 0.024 2%, 0.084 4%, 0.217 7%, 0.37 10%, 0.57 14%, 0.738 18%, 0.865 22%, 0.951 26%, 1.002 30%, 1.032 35%, 1.038 40%, 1.031 46%, 1.019 52%, 1.007 60%, 1 70%, 0.999 82%, 1);
+}
+
+@keyframes rise-in { from { transform: translateY(var(--rise, 6px)); } }
+@keyframes ink-in { from { opacity: 0; } }
+
+/* A sent message: lifts off the composer edge, anchored at the corner nearest to it. */
+.turn-enter {
+  transform-origin: 100% 100%;
+  animation: turn-enter 480ms var(--ease-spring) backwards, ink-in 200ms ease-out backwards;
+}
+@keyframes turn-enter { from { transform: translateY(14px) scale(0.96); } }
+
+/* A block that arrives during a run (process, thinking, tool call). */
+.block-enter { animation: rise-in 340ms var(--ease-out) backwards, ink-in 260ms ease-out backwards; }
+
+/* Usage, timing and actions settle in once the reply has finished writing. */
+.footer-settle { --rise: 4px; animation: rise-in 380ms var(--ease-out) 140ms backwards, ink-in 320ms ease-out 140ms backwards; }
+
+/* A tool call's outcome replacing its spinner; send and stop trading places. */
+.status-in { animation: pop 340ms var(--ease-spring) backwards, ink-in 160ms ease-out backwards; }
+.control-swap { animation: pop 300ms var(--ease-spring) backwards, ink-in 140ms ease-out backwards; }
+@keyframes pop { from { transform: scale(0.78); } }
+
+.chevron { transition: rotate 260ms var(--ease-out); }
+.thinking-block { transition: border-color 420ms var(--ease-out), background-color 420ms var(--ease-out), box-shadow 420ms var(--ease-out); }
+
+/* The presence mark. `--phase` pins the loop to the wall clock so a remount does not restart it. */
+.presence-dot { position: relative; display: inline-block; flex: none; width: 14px; height: 14px; }
+.presence-dot::before, .presence-dot::after {
+  content: ''; position: absolute; inset: 0; margin: auto; width: 7px; height: 7px;
+  border-radius: 50%; background: var(--color-accent-500);
+  animation: 1600ms var(--ease-in-out) var(--phase, 0ms) infinite;
+}
+.presence-dot::before { animation-name: presence-breathe; }
+.presence-dot::after { animation-name: presence-ripple; animation-timing-function: var(--ease-out); }
+@keyframes presence-breathe { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(0.72); opacity: 0.6; } }
+@keyframes presence-ripple { 0% { transform: scale(1); opacity: 0.4; } 75%, 100% { transform: scale(2.5); opacity: 0; } }
+
+/* The waiting line. Its entrance is timed from `--since` (when the wait began), so the copy the
+   list shows before the reply exists and the copy inside the reply are one continuous fade. */
+.presence {
+  display: flex; align-items: center; gap: 8px; min-height: 32px;
+  font-size: 12px; color: var(--chat-text-muted);
+  transition: color 600ms var(--ease-out);
+  animation: rise-in 380ms var(--ease-out) var(--since, 0ms) backwards, ink-in 320ms ease-out var(--since, 0ms) backwards;
+}
+.presence.is-slow { color: var(--chat-accent); }
+.presence-meta { opacity: 0.72; }
+
+/* Landing ⇄ conversation (see useLayoutTransition): the composer travels, the rest cross-fades. */
+.composer-surface { view-transition-name: composer; }
+::view-transition-group(composer) { animation-duration: 520ms; animation-timing-function: var(--ease-out); }
+/* Only the arriving composer is shown, stretched to the travelling box: two cross-fading
+   snapshots of different sizes read as a double image. */
+::view-transition-old(composer) { display: none; }
+::view-transition-new(composer) { animation: none; width: 100%; height: 100%; object-fit: fill; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 300ms; animation-timing-function: ease-out; }
 
 /* ---------- chat prose ---------- */
 
@@ -549,7 +604,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--color-accent-40
   .search-status { position: absolute; bottom: 100%; left: 0; padding: 5px; width: 150px; max-width: none; background: var(--chat-bg); border: 1px solid var(--chat-line); border-radius: 6px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
 
 /* Conversation outline stays within the message pane, including artifact split view. */

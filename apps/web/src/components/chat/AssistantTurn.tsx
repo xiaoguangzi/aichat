@@ -1,12 +1,14 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import type { Message, ToolResultBlock } from '@aichat/shared';
-import { ChevronDown, ListTree, Loader2 } from 'lucide-react';
+import { ChevronDown, ListTree } from 'lucide-react';
 import { sumUsage } from '../../lib/usage.js';
 import { cn } from '../../lib/utils.js';
 import { MessageItem } from './MessageItem.js';
 import { ThinkingBlock } from './ThinkingBlock.js';
 import { ToolCallCard } from './ToolCallCard.js';
 import { ArtifactMessage } from '../artifacts/ArtifactMessage.js';
+import { Collapse } from '../ui/Collapse.js';
+import { PresenceDot } from './PendingIndicator.js';
 
 interface Props {
   messages: Message[];
@@ -21,6 +23,8 @@ interface Props {
   /** Show another variant at this position; absent while a reply is streaming. */
   onSwitchBranch?: (messageId: string) => void;
   onContinue?: (messageId: string) => void;
+  /** When the wait for this turn began (the send), so the waiting indicator keeps one clock. */
+  pendingSince?: number;
 }
 
 /** One line for the collapsed header: the latest bold heading (Responses style), else the live or opening line. */
@@ -32,7 +36,7 @@ function summaryLine(text: string, streaming: boolean) {
 }
 
 /** A tool loop spans several messages, but shares one process disclosure and footer. */
-export function AssistantTurn({ messages, streamingId, running, results, isLastAssistant, onRegenerate, onProcessToggle, modelSwitch, onSwitchBranch, onContinue }: Props) {
+export function AssistantTurn({ messages, streamingId, running, results, isLastAssistant, onRegenerate, onProcessToggle, modelSwitch, onSwitchBranch, onContinue, pendingSince }: Props) {
   const blocks = messages.flatMap((message, messageIndex) => message.content.map((block, index) => ({
     block,
     index,
@@ -63,6 +67,8 @@ export function AssistantTurn({ messages, streamingId, running, results, isLastA
     if (summarized) setOpen(false);
   }, [summarized]);
   const busy = running && !answering;
+  // While the next model call has produced nothing yet, the waiting line below carries the mark.
+  const waiting = messages.some(message => message.id === streamingId && message.content.length === 0);
   const latestThinking = summarized ? [...process].reverse().find(({ block }) => block.type === 'thinking' && block.thinking.trim())?.block : undefined;
   const latestText = latestThinking?.type === 'thinking' ? latestThinking.thinking : '';
   const line = useMemo(() => summaryLine(latestText, busy), [latestText, busy]);
@@ -80,30 +86,30 @@ export function AssistantTurn({ messages, streamingId, running, results, isLastA
   return (
     <div>
       {process.length > 0 && (
-        <div className="mb-3">
+        <div className={cn('mb-3', running && 'block-enter')}>
           <button
             type="button"
             aria-expanded={open}
             aria-controls={detailsId}
             onClick={() => { onProcessToggle(); setOpen(value => !value); }}
-            className="flex max-w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-zinc-500 transition-colors hover:bg-zinc-100/80 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-200 focus-visible:outline-2 focus-visible:outline-accent-500"
+            className="process-toggle -ml-2.5 flex max-w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-zinc-500 transition-colors hover:bg-zinc-100/80 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-200 focus-visible:outline-2 focus-visible:outline-accent-500"
           >
-            {busy ? <Loader2 size={14} className="shrink-0 animate-spin text-accent-500" /> : <ListTree size={14} className="shrink-0" />}
+            {busy && !waiting ? <PresenceDot className="shrink-0" /> : <ListTree size={14} className="shrink-0" />}
             {summary
               ? <span className="min-w-0 truncate text-left font-medium" title={summary}>{summary}</span>
               : <span className="shrink-0 font-medium">执行过程</span>}
             <span className={cn('text-left text-[11px]', summary ? 'shrink-0 text-zinc-400' : 'min-w-0')}>{counts}</span>
             {failedCount > 0 && <span className="shrink-0 text-[11px] text-red-500">{failedCount} 项失败</span>}
-            <ChevronDown size={13} className={cn('shrink-0 transition-transform duration-150', open && 'rotate-180')} />
+            <ChevronDown size={13} className={cn('chevron shrink-0', open && 'rotate-180')} />
           </button>
-          <div id={detailsId} hidden={!open}>
-            {open && process.map(({ block, key, streaming, messageId, index }) => block.type === 'thinking'
+          <Collapse id={detailsId} open={open}>
+            {process.map(({ block, key, streaming, messageId, index }) => block.type === 'thinking'
               ? <ThinkingBlock key={key} text={block.thinking} streaming={streaming} defaultOpen={summarized} />
               : block.type === 'tool_use' ? <ToolCallCard key={key} call={block} result={results[block.id]} />
                 : block.type === 'text' ? <div key={key} className="my-2.5 border-l-2 border-zinc-200 pl-3 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400 [&_.prose-chat]:text-[13px] [&_.prose-chat]:leading-6">
                   <ArtifactMessage text={block.text} live={streaming} messageId={messageId} block={index} />
                 </div> : null)}
-          </div>
+          </Collapse>
         </div>
       )}
       <div className="space-y-2.5">
@@ -130,6 +136,7 @@ export function AssistantTurn({ messages, streamingId, running, results, isLastA
             modelSwitch={modelSwitch}
             onSwitchBranch={onSwitchBranch}
             onContinue={onContinue}
+            pendingSince={messageIndex === 0 ? pendingSince : undefined}
           />;
         })}
       </div>
