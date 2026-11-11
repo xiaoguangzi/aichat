@@ -6,6 +6,7 @@ import { useChat } from '../store/chat.js';
 
 const tabs = [
   { to: '/settings/general', label: '通用' },
+  { to: '/settings/appearance', label: '外观' },
   { to: '/settings/data', label: '数据与日志' },
   { to: '/settings/providers', label: '模型服务' },
   { to: '/settings/jev', label: 'Jev 决策' },
@@ -17,7 +18,7 @@ const tabs = [
 export function SettingsLayout() {
   const currentId = useChat((s) => s.current?.id);
   return (
-    <div className="flex h-full flex-col bg-zinc-50 dark:bg-[#090a0f]">
+    <div className="flex h-full flex-col bg-zinc-50 dark:bg-zinc-950">
       <header className="glass-header">
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-6 py-3.5">
           <Link
